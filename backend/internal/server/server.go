@@ -26,6 +26,7 @@ type Handlers struct {
 	Health  *handler.HealthHandler
 	Auth    *handler.AuthHandler
 	User    *handler.UserHandler
+	Role    *handler.RoleHandler
 	AuthSvc service.AuthService
 }
 
@@ -117,7 +118,20 @@ func registerRoutes(engine *gin.Engine, h Handlers) {
 		adminOnly := protected.Group("")
 		adminOnly.Use(middleware.RequireRole(model.RoleAdmin))
 		{
+			// Users CRUD
 			adminOnly.GET("/users", h.User.List)
+			adminOnly.POST("/users", h.User.Create)
+			adminOnly.GET("/users/:id", h.User.GetByID)
+			adminOnly.PUT("/users/:id", h.User.Update)
+			adminOnly.DELETE("/users/:id", h.User.Delete)
+
+			// Roles & Permissions
+			adminOnly.GET("/roles", h.Role.ListRoles)
+			adminOnly.POST("/roles", h.Role.CreateRole)
+			adminOnly.GET("/roles/:id", h.Role.GetRole)
+			adminOnly.PUT("/roles/:id", h.Role.UpdateRole)
+			adminOnly.DELETE("/roles/:id", h.Role.DeleteRole)
+			adminOnly.GET("/permissions", h.Role.ListPermissions)
 		}
 	}
 }

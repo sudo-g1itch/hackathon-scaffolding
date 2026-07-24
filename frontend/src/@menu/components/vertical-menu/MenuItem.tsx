@@ -95,6 +95,8 @@ const MenuItem: ForwardRefRenderFunction<HTMLLIElement, MenuItemProps> = (props,
         return typeof styleFunction === 'function' ? styleFunction(params) : styleFunction
       }
     }
+
+    return undefined
   }
 
   // Handle the click event.

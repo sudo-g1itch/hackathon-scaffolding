@@ -1,5 +1,6 @@
 import axios from 'axios'
 
+// eslint-disable-next-line import/no-named-as-default-member
 const instance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:20080/api/v1',
   headers: {

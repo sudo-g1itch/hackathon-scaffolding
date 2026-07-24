@@ -73,15 +73,20 @@ func run() error {
 
 	// --- dependency graph, bottom up ---
 	userRepo := repository.NewUserRepository(db)
+	roleRepo := repository.NewRoleRepository(db)
+
 	authSvc := service.NewAuthService(userRepo, cfg.JWT)
+	rbacSvc := service.NewRBACService(userRepo, roleRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
-	userHandler := handler.NewUserHandler(authSvc)
+	userHandler := handler.NewUserHandler(authSvc, rbacSvc)
+	roleHandler := handler.NewRoleHandler(rbacSvc)
 
 	handlers := server.Handlers{
 		Health:  handler.NewHealthHandler(db, version),
 		Auth:    authHandler,
 		User:    userHandler,
+		Role:    roleHandler,
 		AuthSvc: authSvc,
 	}
 

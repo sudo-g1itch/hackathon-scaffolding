@@ -56,3 +56,35 @@ This directory tracks all tasks, features, architectural decisions, and session 
   - Always use existing packages/libraries instead of custom implementations.
   - Maintain session tracking in `tracker/`.
   - Maintain `GEMINI.md` and `tracker/` updated on every change.
+
+---
+
+### Session 4: Docker Stack Setup & Build Pipeline Fixes
+- **Docker Compose & Container Build Pipeline:**
+  - Created `frontend/Dockerfile` (multi-stage Next.js production build) and `frontend/.dockerignore`.
+  - Configured `ENV GOTOOLCHAIN=auto` in `backend/Dockerfile` for Go toolchain downloads.
+- **Frontend Type Safety & Linting:**
+  - Resolved `noUncheckedIndexedAccess` and `noImplicitReturns` TypeScript errors across `@core/components/customizer`, `settingsContext`, `useMediaQuery`, `bundle-icons-css`, and menu components.
+  - Passed `npm run type-check` and `npm run lint` cleanly.
+- **Stack Verification:**
+  - Successfully deployed full local stack (`Postgres`, `Migrate`, `API`, `Web`) via `make up`.
+  - Verified API health endpoint (`GET http://localhost:20080/healthz` -> 200 OK) and Web frontend running on port 20000.
+
+---
+
+### Session 5: Complete User Management & RBAC Module Implementation
+- **Backend Architecture:**
+  - GORM Models: `Permission`, `Role`, and `RolePermission` (`internal/model/role.go`).
+  - Migration `0003_create_roles_permissions.go` seeding default permissions and roles (`admin`, `manager`, `user`).
+  - Repositories & Services: `RoleRepository` (`internal/repository/role_repository.go`), `UserRepository` extension, and `RBACService` (`internal/service/rbac_service.go`).
+  - REST API Handlers: `UserHandler` CRUD endpoints and `RoleHandler` CRUD & permission endpoints (`internal/handler/`).
+  - Composition Root Wiring: Registered in `cmd/api/main.go` and protected with `RequireRole("admin")` middleware in `internal/server/server.go`.
+- **Frontend UI Screens & Navigation:**
+  - TypeScript Types (`src/types/rbacTypes.ts`) & Service API wrapper (`src/services/rbacService.ts`).
+  - `/admin/users`: Server-side paginated user management data table with KPI stat cards, role/status filters, user creation/editing modal, and confirmation dialogs.
+  - `/admin/roles`: Roles management dashboard with interactive Permission Matrix dialog grouped by system module.
+  - `/admin/permissions`: Permissions reference catalog page.
+  - Navigation: Integrated Admin & RBAC section into `VerticalMenu.tsx`.
+- **Quality & Stack Verification:**
+  - `npm run type-check && npm run lint` — Passed with 0 errors.
+  - `make up` — Docker stack built and started all containers cleanly.

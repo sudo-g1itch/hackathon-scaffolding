@@ -20,6 +20,7 @@ func All() []*gormigrate.Migration {
 	return []*gormigrate.Migration{
 		m0001EnableExtensions(),
 		m0002CreateUsersTable(),
+		m0003CreateRolesPermissions(),
 	}
 }
 

@@ -73,6 +73,8 @@ const MenuSection: ForwardRefRenderFunction<HTMLLIElement, MenuSectionProps> = (
     if (menuSectionStyles) {
       return menuSectionStyles[element]
     }
+
+    return undefined
   }
 
   return (

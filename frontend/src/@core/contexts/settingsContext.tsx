@@ -60,7 +60,7 @@ export const SettingsProvider = (props: Props) => {
     navbarContentWidth: themeConfig.navbar.contentWidth,
     contentWidth: themeConfig.contentWidth,
     footerContentWidth: themeConfig.footer.contentWidth,
-    primaryColor: primaryColorConfig[0].main
+    primaryColor: primaryColorConfig[0]?.main ?? '#8C57FF'
   }
 
   const updatedInitialSettings = {

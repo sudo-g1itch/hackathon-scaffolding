@@ -84,10 +84,10 @@ const Navigation = (props: Props) => {
 
   const isDark = currentMode === 'dark'
 
-  const scrollMenu = (container: any, isPerfectScrollbar: boolean) => {
-    container = isBreakpointReached || !isPerfectScrollbar ? container.target : container
+  const scrollMenu = (container: unknown, isPerfectScrollbar: boolean) => {
+    const target = (isBreakpointReached || !isPerfectScrollbar ? (container as React.UIEvent<HTMLElement>).target : container) as HTMLElement
 
-    if (shadowRef && container.scrollTop > 0) {
+    if (shadowRef && target.scrollTop > 0) {
       // @ts-ignore
       if (!shadowRef.current.classList.contains('scrolled')) {
         // @ts-ignore

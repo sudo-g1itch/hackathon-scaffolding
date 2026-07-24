@@ -150,6 +150,8 @@ async function generateIconsCSS() {
     for (let i = 0; i < sources.json.length; i++) {
       const item = sources.json[i]
 
+      if (!item) continue
+
       // Load icon set
       const filename = typeof item === 'string' ? item : item.filename
       const content = JSON.parse(await fs.readFile(filename, 'utf8')) as IconifyJSON
@@ -175,6 +177,8 @@ async function generateIconsCSS() {
   if (sources.svg) {
     for (let i = 0; i < sources.svg.length; i++) {
       const source = sources.svg[i]
+
+      if (!source) continue
 
       // Import icons
       const iconSet = await importDirectory(source.dir, {

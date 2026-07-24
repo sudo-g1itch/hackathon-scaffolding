@@ -15,7 +15,7 @@ type RouterLinkProps = LinkProps &
     className?: string
   }
 
-export const RouterLink = forwardRef((props: RouterLinkProps, ref: any) => {
+export const RouterLink = forwardRef((props: RouterLinkProps, ref: React.Ref<HTMLAnchorElement>) => {
   // Props
   const { href, className, ...other } = props
 

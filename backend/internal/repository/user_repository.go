@@ -18,6 +18,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
 	Update(ctx context.Context, user *model.User) error
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 	List(ctx context.Context, params pagination.Params) ([]model.User, int64, error)
 }
 
@@ -64,6 +65,10 @@ func (r *userRepository) Update(ctx context.Context, user *model.User) error {
 func (r *userRepository) UpdateLastLogin(ctx context.Context, id uuid.UUID) error {
 	now := time.Now().UTC()
 	return r.db.WithContext(ctx).Model(&model.User{}).Where("id = ?", id).Update("last_login_at", &now).Error
+}
+
+func (r *userRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&model.User{}, "id = ?", id).Error
 }
 
 var UserSortable = pagination.Sortable{

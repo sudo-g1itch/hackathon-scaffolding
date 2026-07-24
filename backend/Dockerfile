@@ -8,6 +8,8 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /src
 
+ENV GOTOOLCHAIN=auto
+
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -40,12 +42,12 @@ USER app:app
 
 ENV APP_ENV=production \
     HTTP_HOST=0.0.0.0 \
-    HTTP_PORT=8080
+    HTTP_PORT=20080
 
-EXPOSE 8080
+EXPOSE 20080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
+    CMD wget -qO- http://127.0.0.1:20080/healthz || exit 1
 
 ENTRYPOINT ["/app/api"]
 CMD ["-env", ""]

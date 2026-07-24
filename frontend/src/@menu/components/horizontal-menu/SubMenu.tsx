@@ -271,6 +271,8 @@ const SubMenu: ForwardRefRenderFunction<HTMLLIElement, SubMenuProps> = (props, r
         return typeof styleFunction === 'function' ? styleFunction(params) : styleFunction
       }
     }
+
+    return undefined
   }
 
   // Event emitter allows you to communicate across tree components.

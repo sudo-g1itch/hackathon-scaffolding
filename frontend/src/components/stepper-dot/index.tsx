@@ -17,14 +17,14 @@ const StepperCustomDot = (props: StepIconProps) => {
     return (
       <div
         className={classnames(styles.stepperCustomDot, 'flex items-center justify-center', {
-          [styles.completedStepperCustomDot]: completed
+          [styles.completedStepperCustomDot!]: completed
         })}
       >
         <i className='ri-check-line text-sm text-white' />
       </div>
     )
   } else {
-    return <div className={classnames(styles.stepperCustomDot, { [styles.activeStepperCustomDot]: active })} />
+    return <div className={classnames(styles.stepperCustomDot, { [styles.activeStepperCustomDot!]: active })} />
   }
 }
 

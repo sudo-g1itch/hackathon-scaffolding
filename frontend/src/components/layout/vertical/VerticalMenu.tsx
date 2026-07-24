@@ -8,7 +8,7 @@ import PerfectScrollbar from 'react-perfect-scrollbar'
 import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
 // Component Imports
-import { Menu, MenuItem } from '@menu/vertical-menu'
+import { Menu, MenuItem, SubMenu, MenuSection } from '@menu/vertical-menu'
 
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
@@ -26,7 +26,7 @@ type RenderExpandIconProps = {
 }
 
 type Props = {
-  scrollMenu: (container: any, isPerfectScrollbar: boolean) => void
+  scrollMenu: (container: unknown, isPerfectScrollbar: boolean) => void
 }
 
 const RenderExpandIcon = ({ open, transitionDuration }: RenderExpandIconProps) => (
@@ -74,16 +74,20 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
         <MenuItem href='/about' icon={<i className='ri-information-line' />}>
           About
         </MenuItem>
+        <MenuSection label='Admin & RBAC'>
+          <MenuItem href='/admin/users' icon={<i className='ri-user-line' />}>
+            User Management
+          </MenuItem>
+          <SubMenu label='Roles & Permissions' icon={<i className='ri-shield-keyhole-line' />}>
+            <MenuItem href='/admin/roles' icon={<i className='ri-shield-user-line' />}>
+              Roles
+            </MenuItem>
+            <MenuItem href='/admin/permissions' icon={<i className='ri-lock-2-line' />}>
+              Permissions
+            </MenuItem>
+          </SubMenu>
+        </MenuSection>
       </Menu>
-      {/* <Menu
-        popoutMenuOffset={{ mainAxis: 17 }}
-        menuItemStyles={menuItemStyles(verticalNavOptions, theme)}
-        renderExpandIcon={({ open }) => <RenderExpandIcon open={open} transitionDuration={transitionDuration} />}
-        renderExpandedMenuItemIcon={{ icon: <i className='ri-circle-fill' /> }}
-        menuSectionStyles={menuSectionStyles(verticalNavOptions, theme)}
-      >
-        <GenerateVerticalMenu menuData={menuData(dictionary, params)} />
-      </Menu> */}
     </ScrollWrapper>
   )
 }

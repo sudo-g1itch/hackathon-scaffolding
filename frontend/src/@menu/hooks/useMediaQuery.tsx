@@ -8,19 +8,19 @@ const useMediaQuery = (breakpoint?: string): boolean => {
   const [matches, setMatches] = useState(breakpoint === 'always')
 
   useEffect(() => {
-    if (breakpoint && breakpoint !== 'always') {
-      const media = window.matchMedia(`(max-width: ${breakpoint})`)
+    if (!breakpoint || breakpoint === 'always') return
 
-      if (media.matches !== matches) {
-        setMatches(media.matches)
-      }
+    const media = window.matchMedia(`(max-width: ${breakpoint})`)
 
-      const listener = () => setMatches(media.matches)
-
-      window.addEventListener('resize', listener)
-
-      return () => window.removeEventListener('resize', listener)
+    if (media.matches !== matches) {
+      setMatches(media.matches)
     }
+
+    const listener = (event: MediaQueryListEvent) => setMatches(event.matches)
+
+    media.addEventListener('change', listener)
+
+    return () => media.removeEventListener('change', listener)
   }, [matches, breakpoint])
 
   return matches

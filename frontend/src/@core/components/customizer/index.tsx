@@ -74,7 +74,7 @@ const DebouncedColorPicker = (props: DebouncedColorPickerProps) => {
   const { settings, isColorFromPrimaryConfig, handleChange } = props
 
   // States
-  const [debouncedColor, setDebouncedColor] = useState(settings.primaryColor ?? primaryColorConfig[0].main)
+  const [debouncedColor, setDebouncedColor] = useState(settings.primaryColor ?? primaryColorConfig[0]?.main ?? '#8C57FF')
 
   // Hooks
   useDebounce(() => handleChange('primaryColor', debouncedColor), 200, [debouncedColor])
@@ -82,12 +82,12 @@ const DebouncedColorPicker = (props: DebouncedColorPickerProps) => {
   return (
     <>
       <HexColorPicker
-        color={!isColorFromPrimaryConfig ? (settings.primaryColor ?? primaryColorConfig[0].main) : '#eee'}
+        color={!isColorFromPrimaryConfig ? (settings.primaryColor ?? primaryColorConfig[0]?.main ?? '#8C57FF') : '#eee'}
         onChange={setDebouncedColor}
       />
       <HexColorInput
         className={styles.colorInput}
-        color={!isColorFromPrimaryConfig ? (settings.primaryColor ?? primaryColorConfig[0].main) : '#eee'}
+        color={!isColorFromPrimaryConfig ? (settings.primaryColor ?? primaryColorConfig[0]?.main ?? '#8C57FF') : '#eee'}
         onChange={setDebouncedColor}
         prefixed
         placeholder='Type a color'
@@ -171,8 +171,8 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
     !breakpointReached && (
       <div
         className={classnames('customizer', styles.customizer, {
-          [styles.show]: isOpen,
-          [styles.smallScreen]: isMobileScreen
+          [styles.show!]: isOpen,
+          [styles.smallScreen!]: isMobileScreen
         })}
       >
         <div
@@ -189,7 +189,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
           <div className='flex gap-4'>
             <div onClick={resetSettings} className='relative flex cursor-pointer'>
               <i className='ri-refresh-line text-actionActive' />
-              <div className={classnames(styles.dotStyles, { [styles.show]: isSettingsChanged })} />
+              <div className={classnames(styles.dotStyles, { [styles.show!]: isSettingsChanged })} />
             </div>
             <i className='ri-close-line text-actionActive cursor-pointer' onClick={handleToggle} />
           </div>
@@ -209,7 +209,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                     <div
                       key={item.main}
                       className={classnames(styles.primaryColorWrapper, {
-                        [styles.active]: settings.primaryColor === item.main
+                        [styles.active!]: settings.primaryColor === item.main
                       })}
                       onClick={() => handleChange('primaryColor', item.main)}
                     >
@@ -219,7 +219,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   <div
                     ref={anchorRef}
                     className={classnames(styles.primaryColorWrapper, {
-                      [styles.active]: !isColorFromPrimaryConfig
+                      [styles.active!]: !isColorFromPrimaryConfig
                     })}
                     onClick={() => setIsMenuOpen(prev => !prev)}
                   >
@@ -269,7 +269,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
                       className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'light'
+                        [styles.active!]: settings.mode === 'light'
                       })}
                       onClick={() => handleChange('mode', 'light')}
                     >
@@ -282,7 +282,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
                       className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'dark'
+                        [styles.active!]: settings.mode === 'dark'
                       })}
                       onClick={() => handleChange('mode', 'dark')}
                     >
@@ -295,7 +295,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
                       className={classnames(styles.itemWrapper, styles.modeWrapper, {
-                        [styles.active]: settings.mode === 'system'
+                        [styles.active!]: settings.mode === 'system'
                       })}
                       onClick={() => handleChange('mode', 'system')}
                     >
@@ -312,7 +312,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                 <div className='flex items-center gap-4'>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.skin === 'default' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.skin === 'default' })}
                       onClick={() => handleChange('skin', 'default')}
                     >
                       <SkinDefault />
@@ -323,7 +323,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   </div>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.skin === 'bordered' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.skin === 'bordered' })}
                       onClick={() => handleChange('skin', 'bordered')}
                     >
                       <SkinBordered />
@@ -357,7 +357,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                 <div className='flex items-center justify-between'>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.layout === 'vertical' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.layout === 'vertical' })}
                       onClick={() => handleChange('layout', 'vertical')}
                     >
                       <LayoutVertical />
@@ -368,7 +368,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   </div>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.layout === 'collapsed' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.layout === 'collapsed' })}
                       onClick={() => handleChange('layout', 'collapsed')}
                     >
                       <LayoutCollapsed />
@@ -379,7 +379,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   </div>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.layout === 'horizontal' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.layout === 'horizontal' })}
                       onClick={() => handleChange('layout', 'horizontal')}
                     >
                       <LayoutHorizontal />
@@ -396,7 +396,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
                       className={classnames(styles.itemWrapper, {
-                        [styles.active]: settings.contentWidth === 'compact'
+                        [styles.active!]: settings.contentWidth === 'compact'
                       })}
                       onClick={() =>
                         updateSettings({
@@ -423,7 +423,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                   </div>
                   <div className='flex flex-col items-start gap-0.5'>
                     <div
-                      className={classnames(styles.itemWrapper, { [styles.active]: settings.contentWidth === 'wide' })}
+                      className={classnames(styles.itemWrapper, { [styles.active!]: settings.contentWidth === 'wide' })}
                       onClick={() =>
                         updateSettings({ navbarContentWidth: 'wide', contentWidth: 'wide', footerContentWidth: 'wide' })
                       }
@@ -449,7 +449,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                       <div className='flex flex-col items-start gap-0.5'>
                         <div
                           className={classnames(styles.itemWrapper, {
-                            [styles.active]: direction === 'ltr'
+                            [styles.active!]: direction === 'ltr'
                           })}
                         >
                           <DirectionLtr />
@@ -464,7 +464,7 @@ const Customizer = ({ breakpoint = 'lg', dir = 'ltr', disableDirection = false }
                       <div className='flex flex-col items-start gap-0.5'>
                         <div
                           className={classnames(styles.itemWrapper, {
-                            [styles.active]: direction === 'rtl'
+                            [styles.active!]: direction === 'rtl'
                           })}
                         >
                           <DirectionRtl />
