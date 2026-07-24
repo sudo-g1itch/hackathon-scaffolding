@@ -28,6 +28,7 @@ type Config struct {
 	Database Database `mapstructure:"database"`
 	Log      Log      `mapstructure:"log"`
 	CORS     CORS     `mapstructure:"cors"`
+	JWT      JWT      `mapstructure:"jwt"`
 }
 
 type App struct {
@@ -180,6 +181,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cors.exposed_headers", []string{"X-Request-Id"})
 	v.SetDefault("cors.allow_credentials", true)
 	v.SetDefault("cors.max_age", 12*time.Hour)
+
+	v.SetDefault("jwt.secret", "hackathon-jwt-secret-key-change-in-prod")
+	v.SetDefault("jwt.access_token_ttl", 24*time.Hour)
+	v.SetDefault("jwt.refresh_token_ttl", 7*24*time.Hour)
 }
 
 func (c *Config) Validate() error {

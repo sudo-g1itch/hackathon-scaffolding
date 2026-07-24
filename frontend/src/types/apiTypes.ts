@@ -1,3 +1,38 @@
+export type Role = 'admin' | 'manager' | 'user'
+
+export type User = {
+  id: string
+  created_at: string
+  updated_at: string
+  email: string
+  first_name: string
+  last_name: string
+  role: Role
+  is_active: boolean
+  avatar_url?: string
+  last_login_at?: string
+}
+
+export type AuthResponse = {
+  user: User
+  access_token: string
+  token_type: string
+  expires_in: number
+}
+
+export type LoginRequest = {
+  email: string
+  password: string
+}
+
+export type RegisterRequest = {
+  email: string
+  password: string
+  first_name: string
+  last_name: string
+  role?: Role
+}
+
 export type PaginationMetadata = {
   total: number
   page: number

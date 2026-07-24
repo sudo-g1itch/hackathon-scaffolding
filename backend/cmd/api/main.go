@@ -19,7 +19,9 @@ import (
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/database"
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/handler"
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/logging"
+	"github.com/sudo-g1itch/hackathon-scaffolding/internal/repository"
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/server"
+	"github.com/sudo-g1itch/hackathon-scaffolding/internal/service"
 	"github.com/sudo-g1itch/hackathon-scaffolding/migrations"
 )
 
@@ -70,10 +72,17 @@ func run() error {
 	}
 
 	// --- dependency graph, bottom up ---
-	// TODO: Wire your repositories → services → handlers here.
+	userRepo := repository.NewUserRepository(db)
+	authSvc := service.NewAuthService(userRepo, cfg.JWT)
+
+	authHandler := handler.NewAuthHandler(authSvc)
+	userHandler := handler.NewUserHandler(authSvc)
 
 	handlers := server.Handlers{
-		Health: handler.NewHealthHandler(db, version),
+		Health:  handler.NewHealthHandler(db, version),
+		Auth:    authHandler,
+		User:    userHandler,
+		AuthSvc: authSvc,
 	}
 
 	srv, err := server.New(cfg, log, handlers)

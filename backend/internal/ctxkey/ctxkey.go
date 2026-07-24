@@ -12,6 +12,7 @@ const (
 	keyRequestID = "ctx.request_id"
 	keyLogger    = "ctx.logger"
 	keyUserID    = "ctx.user_id"
+	keyUserRole  = "ctx.user_role"
 )
 
 func SetRequestID(c *gin.Context, id string) { c.Set(keyRequestID, id) }
@@ -49,3 +50,15 @@ func UserID(c *gin.Context) (uuid.UUID, bool) {
 	id, ok := v.(uuid.UUID)
 	return id, ok && id != uuid.Nil
 }
+
+func SetUserRole(c *gin.Context, role string) { c.Set(keyUserRole, role) }
+
+func UserRole(c *gin.Context) string {
+	v, ok := c.Get(keyUserRole)
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+

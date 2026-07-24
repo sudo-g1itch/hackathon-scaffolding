@@ -19,7 +19,7 @@ import (
 func All() []*gormigrate.Migration {
 	return []*gormigrate.Migration{
 		m0001EnableExtensions(),
-		// TODO: Add your migrations here.
+		m0002CreateUsersTable(),
 	}
 }
 

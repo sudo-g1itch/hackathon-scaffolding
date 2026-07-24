@@ -207,6 +207,9 @@ Before building any UI screen, **reuse these canonical helpers**:
 - **Panel Cards**: `import PanelCard from '@components/PanelCard'` — outlined panel with icon badge, title, count chip, action slot, and collapsible body.
 - **Empty States**: `import EmptyState from '@components/EmptyState'` — friendly empty state with animated SVG ECG trace backdrop.
 - **Confirm Dialogs**: `import ConfirmDialog from '@components/ConfirmDialog'` — standard confirmation modal.
+- **Auth & RBAC Context**: `import { useAuth } from '@/contexts/AuthContext'` — access `user`, `login`, `logout`, `register`, `hasRole(role)`.
+- **Auth Guard**: `import AuthGuard from '@components/auth/AuthGuard'` — client-side route authentication wrapper.
+- **Role Guard**: `import RoleGuard from '@components/auth/RoleGuard'` — RBAC wrapper checking `roles={['admin']}` before rendering protected UI.
 
 ---
 

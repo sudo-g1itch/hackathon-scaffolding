@@ -15,14 +15,18 @@ import (
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/config"
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/handler"
 	"github.com/sudo-g1itch/hackathon-scaffolding/internal/middleware"
+	"github.com/sudo-g1itch/hackathon-scaffolding/internal/model"
+	"github.com/sudo-g1itch/hackathon-scaffolding/internal/service"
 )
 
 const APIVersion = "v1"
 
 // Handlers collects everything the router needs.
 type Handlers struct {
-	Health *handler.HealthHandler
-	// TODO: Add your domain handlers here as the project grows.
+	Health  *handler.HealthHandler
+	Auth    *handler.AuthHandler
+	User    *handler.UserHandler
+	AuthSvc service.AuthService
 }
 
 // Server owns the HTTP listener and its lifecycle.
@@ -94,11 +98,28 @@ func registerRoutes(engine *gin.Engine, h Handlers) {
 	engine.GET("/readyz", h.Health.Ready)
 
 	// Versioned API group.
-	_ = engine.Group("/api/" + APIVersion)
+	api := engine.Group("/api/" + APIVersion)
 
-	// TODO: Register your domain routes here. Example:
-	// api.POST("/users", h.User.Create)
-	// api.GET("/users", h.User.List)
+	// Public Auth routes
+	authGroup := api.Group("/auth")
+	{
+		authGroup.POST("/login", h.Auth.Login)
+		authGroup.POST("/register", h.Auth.Register)
+	}
+
+	// Protected routes (Require Authentication)
+	protected := api.Group("")
+	protected.Use(middleware.Authenticate(h.AuthSvc))
+	{
+		protected.GET("/auth/me", h.Auth.Me)
+
+		// Admin-only routes (RBAC check)
+		adminOnly := protected.Group("")
+		adminOnly.Use(middleware.RequireRole(model.RoleAdmin))
+		{
+			adminOnly.GET("/users", h.User.List)
+		}
+	}
 }
 
 // Run starts the server and blocks until ctx is cancelled, then drains.

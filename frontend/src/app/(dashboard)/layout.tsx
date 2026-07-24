@@ -17,14 +17,13 @@ import Navbar from '@components/layout/vertical/Navbar'
 import VerticalFooter from '@components/layout/vertical/Footer'
 import HorizontalFooter from '@components/layout/horizontal/Footer'
 import ScrollToTop from '@core/components/scroll-to-top'
+import AuthGuard from '@components/auth/AuthGuard'
 
 // Util Imports
 import { getMode, getSystemMode } from '@core/utils/serverHelpers'
 
 const Layout = async (props: ChildrenType) => {
   const { children } = props
-
-  // Type guard to ensure lang is a valid Locale
 
   // Vars
   const direction = 'ltr'
@@ -37,12 +36,12 @@ const Layout = async (props: ChildrenType) => {
         systemMode={systemMode}
         verticalLayout={
           <VerticalLayout navigation={<Navigation mode={mode} />} navbar={<Navbar />} footer={<VerticalFooter />}>
-            {children}
+            <AuthGuard>{children}</AuthGuard>
           </VerticalLayout>
         }
         horizontalLayout={
           <HorizontalLayout header={<Header />} footer={<HorizontalFooter />}>
-            {children}
+            <AuthGuard>{children}</AuthGuard>
           </HorizontalLayout>
         }
       />
