@@ -28,6 +28,7 @@ hackathon/
 ├── docker-compose.yml     ← full stack
 ├── docker-compose.override.yml ← dev overrides
 ├── .env.example           ← stack config
+├── tracker/               ← session implementation log & task tracker
 ├── .gitignore
 ├── backend/               ← Go monolith (Gin + GORM + Postgres)
 │   ├── cmd/api/           ← API entrypoint (composition root)
@@ -164,6 +165,23 @@ router → middleware → handler → service → repository → GORM → Postgr
 - Keep commits focused and descriptive.
 - Never commit `node_modules/`, `.next/`, `.env`, `*.pem`, `*.key`, or
   build artifacts.
+
+### 3.13 Use Existing Packages Over Custom Implementations
+
+- **Always prefer existing packages/libraries** (Go modules & npm packages) over reinventing features from scratch to maximize hackathon development speed.
+- If a tested third-party package or internal utility exists, import and reuse it.
+
+### 3.14 Task & Session Tracker (`tracker/`)
+
+- Maintain a dedicated `tracker/` folder at the repo root (`tracker/README.md`) containing an up-to-date record of implemented tasks, features, and session history.
+- **`tracker/` and `GEMINI.md` MUST be updated on every non-trivial change.**
+
+### 3.15 Dedicated Port Range Allocation (20000 - 21000)
+
+Because multiple projects run concurrently on this host system, this application stack MUST use ports strictly in the **20000 - 21000** range:
+- **Frontend (Web):** `20000` (Dev & Prod)
+- **Backend (API):** `20080` (Dev & Prod)
+- **PostgreSQL Database:** `20543` (Host DB port)
 
 ---
 

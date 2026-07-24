@@ -149,7 +149,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.auto_migrate", true)
 
 	v.SetDefault("http.host", "0.0.0.0")
-	v.SetDefault("http.port", 8080)
+	v.SetDefault("http.port", 20080)
 	v.SetDefault("http.read_timeout", 15*time.Second)
 	v.SetDefault("http.write_timeout", 30*time.Second)
 	v.SetDefault("http.idle_timeout", 60*time.Second)
@@ -157,7 +157,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("http.trusted_proxies", []string{})
 
 	v.SetDefault("database.host", "localhost")
-	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.port", 20543)
 	v.SetDefault("database.user", "hackathon")
 	v.SetDefault("database.password", "hackathon")
 	v.SetDefault("database.name", "hackathon")
@@ -173,7 +173,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("log.level", "info")
 	v.SetDefault("log.format", "console")
 
-	v.SetDefault("cors.allowed_origins", []string{"http://localhost:3000"})
+	v.SetDefault("cors.allowed_origins", []string{"http://localhost:20000"})
 	v.SetDefault("cors.allowed_methods", []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"})
 	v.SetDefault("cors.allowed_headers", []string{
 		"Origin", "Content-Type", "Accept", "Authorization", "X-Request-Id",

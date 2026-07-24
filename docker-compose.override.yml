@@ -4,7 +4,7 @@
 services:
   postgres:
     ports:
-      - "${DATABASE_HOST_PORT:-5432}:5432"
+      - "${DATABASE_HOST_PORT:-20543}:5432"
 
   api:
     environment:
