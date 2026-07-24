@@ -188,8 +188,25 @@ router → middleware → handler → service → repository → GORM → Postgr
 | Framework | Next.js 16 / React 19 |
 | UI Library | MUI 7 (Materialize template) |
 | Type Safety | TypeScript (strict mode) |
+| Data Fetching | Axios (`@/libs/axios`) + `@tanstack/react-table` |
 | Linting | ESLint + Prettier |
-| Path Aliases | `@/*`, `@core/*`, `@layouts/*`, `@menu/*`, etc. |
+| Path Aliases | `@/*`, `@core/*`, `@layouts/*`, `@menu/*`, `@components/*` |
+
+#### Shared Frontend Architecture (STRICT DRY)
+
+Before building any UI screen, **reuse these canonical helpers**:
+
+- **HTTP Client**: `import axios from '@/libs/axios'` — preconfigured with `NEXT_PUBLIC_API_URL`, bearer token injection, and 401 interceptors.
+- **API Types**: `import type { StandardResponse, ListQueryParams, PaginationMetadata, SortOrder } from '@/types/apiTypes'`
+- **Error Handling**: `import { handleApiError, getApiErrorMessage } from '@/utils/handleApiError'` — maps backend field validation errors (`error.fields`) onto `react-hook-form` fields.
+- **Server Table State**: `import { useServerTable } from '@/hooks/useServerTable'` — single source of truth for `page`, `pageSize`, `search`, `sortBy`, `sortOrder`, and `params`.
+- **Data Table**: `import DataTable from '@components/DataTable'` — TanStack table wrapper with server-side pagination, server sorting headers, skeleton loaders, and empty state.
+- **Table Filters**: `import DataTableFilters from '@components/DataTableFilters'` — debounced search input, filter chips, action button, and reset toolbar.
+- **Status Chips**: `import StatusChip from '@components/StatusChip'` — tonal status chip with leading dot indicator, resolving colors via `@/configs/statusColors`.
+- **Stat Cards**: `import StatCard from '@components/StatCard'` — KPI stat card with count-up animation (`useCountUp`), accent bar, and trend indicator.
+- **Panel Cards**: `import PanelCard from '@components/PanelCard'` — outlined panel with icon badge, title, count chip, action slot, and collapsible body.
+- **Empty States**: `import EmptyState from '@components/EmptyState'` — friendly empty state with animated SVG ECG trace backdrop.
+- **Confirm Dialogs**: `import ConfirmDialog from '@components/ConfirmDialog'` — standard confirmation modal.
 
 ---
 
