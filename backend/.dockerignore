@@ -1,0 +1,20 @@
+# Keep the build context small and free of anything secret.
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keys/
+
+bin/
+vendor/
+*.test
+*.out
+coverage.*
+
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md

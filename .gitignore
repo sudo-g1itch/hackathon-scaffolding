@@ -1,0 +1,44 @@
+# ---- Go / backend ----
+# Binaries and build output
+/backend/bin/
+/backend/api
+/backend/**/*.exe
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Go workspace / vendor
+go.work.sum
+/backend/vendor/
+
+# ---- Secrets & keys ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+/backend/keys/
+
+# ---- Node / frontend ----
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.pnpm-store/
+
+# ---- Editors / OS ----
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
+.vscode/
+
+# ---- Local databases / dumps ----
+*.sqlite
+*.db
+/backups/
+
+# ---- AI agents ----
+.claude/
+.gemini/antigravity/

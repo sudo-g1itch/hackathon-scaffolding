@@ -1,0 +1,18 @@
+# Development overrides — applied automatically by `docker compose up`.
+# Production: `docker compose -f docker-compose.yml up`.
+
+services:
+  postgres:
+    ports:
+      - "${DATABASE_HOST_PORT:-5432}:5432"
+
+  api:
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: debug
+      LOG_FORMAT: console
+      DATABASE_LOG_LEVEL: info
+
+  web:
+    environment:
+      NODE_ENV: development
