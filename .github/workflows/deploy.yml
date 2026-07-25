@@ -5,6 +5,12 @@ name: Deploy
 on:
   push:
     branches: [main]
+    # Docs-only and tracker changes don't affect the running app — skip deploys.
+    paths-ignore:
+      - "**.md"
+      - "tracker/**"
+      - ".gitignore"
+      - "LICENSE"
 
 # Never let two deploys run at once; let the newest finish rather than cancel
 # a half-applied one.

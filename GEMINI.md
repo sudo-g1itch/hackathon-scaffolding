@@ -312,3 +312,104 @@ A change is not complete until:
 - ❌ Do NOT duplicate code — import shared helpers.
 - ❌ Do NOT use `any` in TypeScript unless absolutely necessary (warned by ESLint).
 - ❌ Do NOT use `console.log` in production code (warned by ESLint).
+
+---
+
+## 9. Deployment (CI/CD)
+
+Deployment is **fully automated via GitHub Actions on a self-hosted runner** that
+lives on the deploy server itself. **To deploy, you just push to `main`** — the
+runner rebuilds and restarts the stack in place. There is nothing to run by hand
+in the normal flow.
+
+### 9.1 How it works
+
+```
+push to main ──► GitHub Actions ──► self-hosted runner (ON the server)
+                                     │
+                                     ├─ write production .env (secrets + host)
+                                     ├─ docker compose build
+                                     ├─ run DB migrations (explicit)
+                                     ├─ docker compose up -d
+                                     └─ health-check API /healthz
+```
+
+| Piece | Location | Purpose |
+|---|---|---|
+| **CI** | `.github/workflows/ci.yml` | On PRs to `main` + non-`main` pushes: Go `build`/`vet`/`test` + frontend `lint`/`type-check`/`build`. |
+| **CD** | `.github/workflows/deploy.yml` | On **push to `main`**: build images, migrate, `up -d`, health-check. |
+| **Prod override** | `docker-compose.prod.yml` | Production-only compose layer (see 9.3). |
+| **Runner** | server, systemd service | Executes the jobs. Runs as `root`. |
+
+Both workflows run on `runs-on: [self-hosted, hackathon]`. The repo is **private**,
+so all jobs use the self-hosted runner (no GitHub-hosted minutes).
+
+### 9.2 The server & runner
+
+- **Server:** Ubuntu 24.04, public IP `69.164.244.74`. Also hosts other unrelated
+  runners — **only touch the hackathon one.**
+- **Runner:** name `hackathon-interserver-dev`, dir `/opt/actions-runner-hackathon`,
+  systemd unit `actions.runner.sudo-g1itch-hackathon-scaffolding.hackathon-interserver-dev.service`.
+- Check / restart it:
+  ```bash
+  systemctl status  actions.runner.sudo-g1itch-hackathon-scaffolding.hackathon-interserver-dev.service
+  systemctl restart actions.runner.sudo-g1itch-hackathon-scaffolding.hackathon-interserver-dev.service
+  ```
+- **Deployed URLs:** web → `http://69.164.244.74:20000`, API → `http://69.164.244.74:20080`.
+
+### 9.3 Production vs. development compose
+
+- **Dev** (`docker compose up`, `make up`): auto-loads `docker-compose.override.yml`.
+- **Prod** (what CD runs): explicit files, so the dev override is **NOT** loaded:
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+  ```
+  `docker-compose.prod.yml` does two things production requires:
+  1. Passes `NEXT_PUBLIC_API_URL` as a **build arg** (Next.js inlines `NEXT_PUBLIC_*`
+     at build time — a runtime env var is ignored).
+  2. Sets `APP_AUTO_MIGRATE=false` on the `migrate` service.
+
+### 9.4 Production config guards (IMPORTANT)
+
+When `APP_ENV=production`, `internal/config` **rejects** the app on startup unless:
+
+| Guard | Required value | Why the deploy sets it |
+|---|---|---|
+| `app.auto_migrate` | `false` | Migrations run as an explicit step, never on boot. Set via `APP_AUTO_MIGRATE=false`. |
+| `database.ssl_mode` | **not** `disable` | Deploy uses `DATABASE_SSL_MODE=prefer` — TLS with plaintext fallback, since the bundled Postgres has no TLS (`require` would fail to connect over the internal network). |
+
+If you add new production guards in `internal/config`, **update the `.env` block in
+`deploy.yml` accordingly** or the deploy will fail.
+
+### 9.5 Secrets & config
+
+- Repo secret **`DATABASE_PASSWORD`** (GitHub → Settings → Secrets) is injected into
+  the production `.env` at deploy time. Never hard-code it.
+- The production `.env` is generated fresh each deploy inside `deploy.yml`
+  (`git clean` wipes it between runs) — do **not** rely on a hand-placed `.env` on
+  the server.
+- Ports stay in the **20000–21000** range (see 3.15).
+
+### 9.6 Manual deploy / rollback (only if Actions is unavailable)
+
+SSH to the server, then in the runner's checkout
+(`/opt/actions-runner-hackathon/_work/hackathon-scaffolding/hackathon-scaffolding`):
+
+```bash
+# redeploy current main
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+# apply migrations explicitly
+docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm migrate
+
+# rollback: check out a known-good commit, then redeploy the same way
+```
+
+### 9.7 Deploy troubleshooting
+
+- **Watch a run:** `gh run list --workflow deploy.yml` then
+  `gh run view <id> --log-failed`.
+- **App up but frontend calls the wrong API:** `NEXT_PUBLIC_API_URL` is baked at
+  **build** time — a rebuild (not just restart) is required after changing it.
+- **Migration/boot fails with "invalid configuration":** a production guard (9.4)
+  is unsatisfied — check the generated `.env` values in `deploy.yml`.
