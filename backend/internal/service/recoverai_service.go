@@ -113,10 +113,59 @@ type CaregiverOption struct {
 	Name string    `json:"name"`
 }
 
-// EmergencyResult pairs the persisted log with the plan the user is shown.
+// EmergencyResult pairs the persisted log with the plan the user is shown, plus
+// everything the send step needs: ready-made scripts and who they would reach.
 type EmergencyResult struct {
-	Log  *model.EmergencyLog `json:"log"`
-	Plan *EmergencyPlan      `json:"plan"`
+	Log     *model.EmergencyLog     `json:"log"`
+	Plan    *EmergencyPlan          `json:"plan"`
+	Presets []model.EmergencyScript `json:"presets"`
+
+	// CaregiverLinked is false when there is nobody to alert. The UI must say
+	// so rather than offering a send button that cannot work.
+	CaregiverLinked bool   `json:"caregiver_linked"`
+	CaregiverName   string `json:"caregiver_name"`
+}
+
+// EmergencyAlertData is a sent alert as its recipient sees it.
+//
+// PRIVACY NOTE: AudioTranscript is here, and a check-in transcript never is.
+// The difference is intent — a check-in is the user talking to the app, while
+// this note was recorded specifically in order to be sent to this person.
+type EmergencyAlertData struct {
+	ID              uuid.UUID  `json:"id"`
+	OccurredAt      time.Time  `json:"occurred_at"`
+	SharedAt        *time.Time `json:"shared_at"`
+	Message         string     `json:"message"`
+	LocationURL     string     `json:"location_url"`
+	AudioTranscript string     `json:"audio_transcript"`
+	AcknowledgedAt  *time.Time `json:"acknowledged_at"`
+	Actions         []string   `json:"actions"`
+}
+
+// ToEmergencyAlertData projects a log for its recipient. Exported because both
+// the support thread and the caregiver's overview render the same shape.
+func ToEmergencyAlertData(entry *model.EmergencyLog) EmergencyAlertData {
+	return EmergencyAlertData{
+		ID:              entry.ID,
+		OccurredAt:      entry.CreatedAt,
+		SharedAt:        entry.SharedAt,
+		Message:         entry.SentMessage,
+		LocationURL:     entry.LocationURL(),
+		AudioTranscript: entry.AudioTranscript,
+		AcknowledgedAt:  entry.AcknowledgedAt,
+		Actions:         entry.Actions,
+	}
+}
+
+// EmergencyAlertInput is what the user chose to send.
+type EmergencyAlertInput struct {
+	Message string
+
+	// ShareLocation is an explicit opt-in per alert, not a saved setting.
+	// Latitude/Longitude are ignored unless it is true.
+	ShareLocation bool
+	Latitude      *float64
+	Longitude     *float64
 }
 
 // RecoverAIService orchestrates the recovery features: voice → reasoning →
@@ -134,6 +183,13 @@ type RecoverAIService interface {
 
 	// Crisis
 	TriggerEmergency(ctx context.Context, userID uuid.UUID) (*EmergencyResult, error)
+
+	// AttachEmergencyNote transcribes a voice note recorded for an alert. The
+	// transcript is what the caregiver reads — the audio itself is not stored.
+	AttachEmergencyNote(ctx context.Context, userID, logID uuid.UUID, audio []byte, mimeType string) (*EmergencyResult, error)
+
+	// SendEmergencyAlert delivers the chosen script to the linked caregiver.
+	SendEmergencyAlert(ctx context.Context, userID, logID uuid.UUID, in EmergencyAlertInput) (*EmergencyResult, error)
 
 	// Coach & education
 	SendCoachMessage(ctx context.Context, userID uuid.UUID, message string) ([]model.CoachMessage, error)
@@ -467,7 +523,167 @@ func (s *recoverAIService) TriggerEmergency(ctx context.Context, userID uuid.UUI
 
 	s.log.Warn("emergency triggered", zap.String("user_id", userID.String()))
 
-	return &EmergencyResult{Log: entry, Plan: plan}, nil
+	return s.emergencyResult(ctx, userID, entry, plan)
+}
+
+// emergencyResult decorates a log with the plan, the ready-made scripts and who
+// the alert would actually reach. Built in one place so every step of the flow
+// answers with the same shape.
+func (s *recoverAIService) emergencyResult(
+	ctx context.Context,
+	userID uuid.UUID,
+	entry *model.EmergencyLog,
+	plan *EmergencyPlan,
+) (*EmergencyResult, error) {
+	profile, err := s.repo.GetProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+
+	sender, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+
+	senderName := ""
+	if sender != nil {
+		senderName = sender.FirstName
+	}
+
+	// The free-text "who do we address this to" wins; the linked account's name
+	// is the fallback, so the script is addressed to a person either way.
+	addressee := ""
+	caregiverName := ""
+	linked := false
+
+	if profile != nil {
+		addressee = strings.TrimSpace(profile.CaregiverName)
+		linked = profile.CaregiverID != nil
+		if profile.Caregiver != nil {
+			caregiverName = profile.Caregiver.FullName()
+		}
+	}
+	if addressee == "" {
+		addressee = caregiverName
+	}
+
+	return &EmergencyResult{
+		Log:             entry,
+		Plan:            plan,
+		Presets:         model.EmergencyScriptPresets(senderName, addressee),
+		CaregiverLinked: linked,
+		CaregiverName:   caregiverName,
+	}, nil
+}
+
+// loadOwnEmergency fetches an emergency log and refuses one that is not the
+// caller's. A crisis record is the most private thing in the app.
+func (s *recoverAIService) loadOwnEmergency(
+	ctx context.Context,
+	userID, logID uuid.UUID,
+) (*model.EmergencyLog, error) {
+	entry, err := s.repo.GetEmergencyLog(ctx, logID)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	if entry == nil || entry.UserID != userID {
+		return nil, apperr.NotFound("emergency")
+	}
+	return entry, nil
+}
+
+func (s *recoverAIService) AttachEmergencyNote(
+	ctx context.Context,
+	userID, logID uuid.UUID,
+	audio []byte,
+	mimeType string,
+) (*EmergencyResult, error) {
+	entry, err := s.loadOwnEmergency(ctx, userID, logID)
+	if err != nil {
+		return nil, err
+	}
+
+	transcript, err := s.voice.TranscribeAudio(ctx, audio, mimeType)
+	if err != nil {
+		return nil, err
+	}
+
+	transcript = strings.TrimSpace(transcript)
+	if transcript == "" {
+		return nil, apperr.Unprocessable(
+			"We could not hear anything in that note. Please check your microphone and try again.")
+	}
+
+	entry.AudioTranscript = transcript
+	if err := s.repo.UpdateEmergencyLog(ctx, entry); err != nil {
+		return nil, apperr.Internal(err)
+	}
+
+	return s.emergencyResult(ctx, userID, entry, nil)
+}
+
+func (s *recoverAIService) SendEmergencyAlert(
+	ctx context.Context,
+	userID, logID uuid.UUID,
+	in EmergencyAlertInput,
+) (*EmergencyResult, error) {
+	entry, err := s.loadOwnEmergency(ctx, userID, logID)
+	if err != nil {
+		return nil, err
+	}
+
+	message := strings.TrimSpace(in.Message)
+	if message == "" {
+		return nil, apperr.Validation(apperr.Fields{"message": {"is required"}})
+	}
+
+	profile, err := s.repo.GetProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	if profile == nil || profile.CaregiverID == nil {
+		// Refusing here is the honest answer. Recording the alert as "sent"
+		// with nobody to send it to would tell someone in crisis that help is
+		// coming when nothing has happened.
+		return nil, apperr.Unprocessable(
+			"You have not linked a caregiver yet, so there is nobody to alert. " +
+				"You can choose one on your recovery plan.")
+	}
+
+	caregiverID := *profile.CaregiverID
+	now := s.now().UTC()
+
+	entry.SentMessage = message
+	entry.SharedAt = &now
+	entry.CaregiverID = &caregiverID
+	entry.ShareLocation = in.ShareLocation && in.Latitude != nil && in.Longitude != nil
+
+	if entry.ShareLocation {
+		entry.LocationLat = in.Latitude
+		entry.LocationLng = in.Longitude
+	} else {
+		entry.LocationLat = nil
+		entry.LocationLng = nil
+	}
+
+	if err := s.repo.UpdateEmergencyLog(ctx, entry); err != nil {
+		return nil, apperr.Internal(err)
+	}
+
+	// Delivery is the support thread — the same conversation the caregiver
+	// already watches, so an alert cannot land somewhere they never look.
+	if err := s.support.PostEmergencyAlert(ctx, userID, caregiverID, entry); err != nil {
+		return nil, err
+	}
+
+	s.log.Warn("emergency alert sent",
+		zap.String("user_id", userID.String()),
+		zap.String("caregiver_id", caregiverID.String()),
+		zap.Bool("shared_location", entry.ShareLocation),
+		zap.Bool("has_voice_note", entry.AudioTranscript != ""),
+	)
+
+	return s.emergencyResult(ctx, userID, entry, nil)
 }
 
 // --- coach & education -------------------------------------------------------

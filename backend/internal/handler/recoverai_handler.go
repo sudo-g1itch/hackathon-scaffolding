@@ -163,6 +163,79 @@ func (h *RecoverAIHandler) Emergency(c *gin.Context) {
 	response.Created(c, result)
 }
 
+// POST /api/v1/emergency/:logID/note — multipart "audio": a voice note to send
+// with the alert. Only its transcript is stored; the recording is not kept.
+func (h *RecoverAIHandler) EmergencyNote(c *gin.Context) {
+	userID, ok := ctxkey.UserID(c)
+	if !ok {
+		response.Error(c, apperr.Unauthorized("unauthorized"))
+		return
+	}
+
+	logID, ok := uuidParam(c, "logID")
+	if !ok {
+		return
+	}
+
+	audio, mimeType, err := h.readAudio(c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	result, err := h.svc.AttachEmergencyNote(c.Request.Context(), userID, logID, audio, mimeType)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.OK(c, result)
+}
+
+type emergencyAlertRequest struct {
+	Message string `json:"message" binding:"required,max=2000"`
+
+	// Location is only read when share_location is true. Sent per alert, never
+	// stored as a standing preference.
+	ShareLocation bool     `json:"share_location"`
+	Latitude      *float64 `json:"latitude" binding:"omitempty,min=-90,max=90"`
+	Longitude     *float64 `json:"longitude" binding:"omitempty,min=-180,max=180"`
+}
+
+// POST /api/v1/emergency/:logID/alert — send the chosen script to the linked
+// caregiver. This one DOES contact somebody: it posts into the conversation
+// they already watch.
+func (h *RecoverAIHandler) EmergencyAlert(c *gin.Context) {
+	userID, ok := ctxkey.UserID(c)
+	if !ok {
+		response.Error(c, apperr.Unauthorized("unauthorized"))
+		return
+	}
+
+	logID, ok := uuidParam(c, "logID")
+	if !ok {
+		return
+	}
+
+	var req emergencyAlertRequest
+	if !response.BindJSON(c, &req) {
+		return
+	}
+
+	result, err := h.svc.SendEmergencyAlert(c.Request.Context(), userID, logID, service.EmergencyAlertInput{
+		Message:       req.Message,
+		ShareLocation: req.ShareLocation,
+		Latitude:      req.Latitude,
+		Longitude:     req.Longitude,
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.OK(c, result)
+}
+
 type chatRequest struct {
 	Message string `json:"message" binding:"required,max=2000"`
 }

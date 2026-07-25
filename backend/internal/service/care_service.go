@@ -69,6 +69,11 @@ type PatientOverview struct {
 	Goals    []GoalData       `json:"goals"`
 	Summary  GoalSummary      `json:"goal_summary"`
 
+	// Emergencies the person chose to send: the message, the location if they
+	// attached one, and the voice note's transcript. Alerts they triggered but
+	// never sent are not listed — those were never addressed to anyone.
+	Emergencies []EmergencyAlertData `json:"emergencies"`
+
 	// SharesCheckinDetails tells the UI why summaries are missing, so it can
 	// say "they have kept the details private" instead of rendering blanks.
 	SharesCheckinDetails bool `json:"shares_checkin_details"`
@@ -86,6 +91,11 @@ type PatientOverview struct {
 type CareService interface {
 	ListPatients(ctx context.Context, caregiverID uuid.UUID) ([]CaregiverPatient, error)
 	GetPatientOverview(ctx context.Context, actor Actor, patientID uuid.UUID) (*PatientOverview, error)
+
+	// AcknowledgeEmergency lets the caregiver confirm they have seen an alert.
+	// It is the only thing that lets the app honestly tell the person in crisis
+	// that somebody is there.
+	AcknowledgeEmergency(ctx context.Context, actor Actor, logID uuid.UUID) (*EmergencyAlertData, error)
 }
 
 type careService struct {
@@ -199,14 +209,67 @@ func (s *careService) GetPatientOverview(
 		patient.UnreadMessages = unread[patientID]
 	}
 
+	logs, err := s.repo.ListEmergencyLogs(ctx, patientID, patientCheckinLimit)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+
+	alerts := make([]EmergencyAlertData, 0, len(logs))
+	for i := range logs {
+		// Only what was actually sent. A plan the person worked through alone
+		// is theirs, and the caregiver was never part of it.
+		if logs[i].SharedAt == nil {
+			continue
+		}
+		alerts = append(alerts, ToEmergencyAlertData(&logs[i]))
+	}
+
 	return &PatientOverview{
 		Patient:              *patient,
 		Checkins:             history,
 		Goals:                goals,
 		Summary:              *summary,
+		Emergencies:          alerts,
 		SharesCheckinDetails: profile.ShareCheckinDetails,
 		Relation:             string(relation),
 	}, nil
+}
+
+func (s *careService) AcknowledgeEmergency(
+	ctx context.Context,
+	actor Actor,
+	logID uuid.UUID,
+) (*EmergencyAlertData, error) {
+	entry, err := s.repo.GetEmergencyLog(ctx, logID)
+	if err != nil {
+		return nil, apperr.Internal(err)
+	}
+	if entry == nil || entry.SharedAt == nil {
+		return nil, apperr.NotFound("emergency")
+	}
+
+	// Only the caregiver it was sent to may acknowledge it — acknowledgement is
+	// a promise that someone is responding, so an admin cannot make it.
+	if _, err := s.requireOneOf(ctx, actor, entry.UserID, RelationCaregiver); err != nil {
+		return nil, err
+	}
+
+	if entry.AcknowledgedAt == nil {
+		at := s.now().UTC()
+
+		entry.AcknowledgedAt = &at
+		if err := s.repo.UpdateEmergencyLog(ctx, entry); err != nil {
+			return nil, apperr.Internal(err)
+		}
+
+		s.log.Warn("emergency acknowledged",
+			zap.String("emergency_id", entry.ID.String()),
+			zap.String("caregiver_id", actor.ID.String()),
+		)
+	}
+
+	alert := ToEmergencyAlertData(entry)
+	return &alert, nil
 }
 
 // summarisePatient turns a profile into the signal row both the list and the

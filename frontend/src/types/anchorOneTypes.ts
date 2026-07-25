@@ -46,6 +46,18 @@ export type EmergencyLog = {
   generated_script: string
   grounding_exercise: string
   encouraging_message: string
+
+  /**
+   * What was actually sent, if anything. Empty until the user presses send.
+   * The optional fields are omitted by the API while unset, not sent as null.
+   */
+  sent_message: string
+  shared_at?: string
+  share_location: boolean
+  location_lat?: number
+  location_lng?: number
+  audio_transcript: string
+  acknowledged_at?: string
 }
 
 export type EmergencyPlan = {
@@ -55,9 +67,48 @@ export type EmergencyPlan = {
   encouraging_message: string
 }
 
+/** One ready-to-send message, already addressed and signed by the server. */
+export type EmergencyScript = {
+  id: string
+  label: string
+  body: string
+}
+
 export type EmergencyResult = {
   log: EmergencyLog
-  plan: EmergencyPlan
+
+  /** Null on the follow-up calls — the plan is generated once, at trigger. */
+  plan: EmergencyPlan | null
+  presets: EmergencyScript[]
+
+  /** False when there is nobody to alert; the UI must say so, not offer send. */
+  caregiver_linked: boolean
+  caregiver_name: string
+}
+
+/** What the user chose to send. Location is opt-in per alert, never a setting. */
+export type EmergencyAlertInput = {
+  message: string
+  share_location: boolean
+  latitude?: number
+  longitude?: number
+}
+
+/**
+ * A sent alert as its recipient sees it.
+ *
+ * `audio_transcript` is here while a check-in transcript never is: this note was
+ * recorded specifically in order to be sent to this person.
+ */
+export type EmergencyAlert = {
+  id: string
+  occurred_at: string
+  shared_at: string | null
+  message: string
+  location_url: string
+  audio_transcript: string
+  acknowledged_at: string | null
+  actions: string[] | null
 }
 
 export type RecoveryProfile = {
@@ -235,15 +286,21 @@ export type ProgressInput = {
 
 // --- caregiver <-> user messaging --------------------------------------------
 
+export type SupportMessageKind = 'message' | 'emergency'
+
 export type SupportMessage = {
   id: string
   patient_id: string
   caregiver_id: string
   sender_id: string
   sender_role: AuthorRole
+  kind: SupportMessageKind
   body: string
   read_at: string | null
   created_at: string
+
+  /** Present on emergency-kind messages: location link + voice-note transcript. */
+  emergency?: EmergencyAlert
 }
 
 /**
@@ -285,6 +342,9 @@ export type PatientOverview = {
   checkins: PatientCheckin[]
   goals: Goal[]
   goal_summary: GoalSummary
+
+  /** Only alerts the person actually sent. Unsent plans stay theirs. */
+  emergencies: EmergencyAlert[]
   shares_checkin_details: boolean
   relation: CareRelation
 }

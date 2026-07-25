@@ -44,7 +44,7 @@ import type { GoalInput, PatientOverview, RiskLevel } from '@/types/anchorOneTyp
 import { RISK_SCORES } from '@/types/anchorOneTypes'
 import { getApiErrorMessage } from '@/utils/handleApiError'
 
-type TabKey = 'signals' | 'plan' | 'messages'
+type TabKey = 'signals' | 'plan' | 'alerts' | 'messages'
 
 const RISK_TICKS: Record<number, string> = { 1: 'LOW', 2: 'MEDIUM', 3: 'HIGH' }
 
@@ -60,6 +60,7 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
 
   const [suggestOpen, setSuggestOpen] = useState(false)
   const [openGoalId, setOpenGoalId] = useState<string | null>(null)
+  const [acknowledging, setAcknowledging] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -80,6 +81,22 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
     await anchorOneService.createPatientGoal(patientId, input)
     await load()
     setToast('Goal suggested. They can accept, edit or archive it.')
+  }
+
+  // Acknowledging tells the sender somebody is there — the app cannot say that
+  // on its own, so this is the only thing that makes it true.
+  const acknowledge = async (emergencyId: string) => {
+    setAcknowledging(emergencyId)
+
+    try {
+      await anchorOneService.acknowledgeEmergency(emergencyId)
+      await load()
+      setToast('They have been told you have seen it.')
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Could not send that acknowledgement.'))
+    } finally {
+      setAcknowledging(null)
+    }
   }
 
   if (loading) {
@@ -103,7 +120,8 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
     )
   }
 
-  const { patient, checkins, goals, goal_summary: summary } = overview
+  const { patient, checkins, goals, goal_summary: summary, emergencies } = overview
+  const unacknowledged = emergencies.filter(alert => !alert.acknowledged_at)
 
   // Oldest-first so the trend line reads left to right.
   const trend = [...checkins]
@@ -139,6 +157,22 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
         </Box>
         <RiskChip risk={patient.risk} prominent />
       </Box>
+
+      {unacknowledged.length > 0 && (
+        <Alert
+          severity='error'
+          sx={{ fontWeight: 600 }}
+          action={
+            <Button size='small' color='inherit' onClick={() => setTab('alerts')}>
+              Open
+            </Button>
+          }
+        >
+          {unacknowledged.length === 1
+            ? 'They sent an SOS you have not acknowledged yet.'
+            : `${unacknowledged.length} SOS alerts are waiting for your acknowledgement.`}
+        </Alert>
+      )}
 
       {patient.risk === 'HIGH' && (
         <Alert severity='error' sx={{ fontWeight: 600 }}>
@@ -179,6 +213,7 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
           <Tabs value={tab} onChange={(_event, value: TabKey) => setTab(value)} variant='scrollable' scrollButtons='auto'>
             <Tab value='signals' label='Check-ins' />
             <Tab value='plan' label={`Recovery plan (${goals.length})`} />
+            <Tab value='alerts' label={emergencies.length > 0 ? `SOS alerts (${emergencies.length})` : 'SOS alerts'} />
             <Tab
               value='messages'
               label={patient.unread_messages > 0 ? `Messages (${patient.unread_messages})` : 'Messages'}
@@ -300,6 +335,82 @@ const PatientDetailPage = ({ params }: { params: Promise<{ patientId: string }> 
                     </Grid>
                   ))}
                 </Grid>
+              )}
+            </Box>
+          )}
+
+          {tab === 'alerts' && (
+            <Box className='flex flex-col gap-4'>
+              {emergencies.length === 0 ? (
+                <EmptyState
+                  icon='ri-shield-check-line'
+                  title='No SOS alerts'
+                  message='If they press HELP ME and send it to you, it appears here with their location and voice note.'
+                />
+              ) : (
+                emergencies.map(alert => (
+                  <Card key={alert.id} variant='outlined' sx={{ borderColor: 'error.main' }}>
+                    <CardContent className='flex flex-col gap-3'>
+                      <Box className='flex flex-wrap items-center justify-between gap-2'>
+                        <Typography variant='subtitle2' color='error.main'>
+                          <i className='ri-alarm-warning-fill align-middle mie-1' />
+                          SOS · {new Date(alert.shared_at ?? alert.occurred_at).toLocaleString()}
+                        </Typography>
+                        {alert.acknowledged_at ? (
+                          <Chip
+                            size='small'
+                            color='success'
+                            variant='tonal'
+                            label={`Acknowledged ${new Date(alert.acknowledged_at).toLocaleString()}`}
+                          />
+                        ) : (
+                          <Button
+                            size='small'
+                            variant='contained'
+                            color='success'
+                            disabled={acknowledging === alert.id}
+                            onClick={() => void acknowledge(alert.id)}
+                            startIcon={<i className='ri-check-line' />}
+                          >
+                            I&apos;ve seen this
+                          </Button>
+                        )}
+                      </Box>
+
+                      <Typography variant='body1' sx={{ whiteSpace: 'pre-wrap' }}>
+                        {alert.message}
+                      </Typography>
+
+                      {alert.audio_transcript && (
+                        <Box>
+                          <Typography variant='caption' color='text.secondary'>
+                            <i className='ri-mic-line align-middle mie-1' />
+                            Voice note
+                          </Typography>
+                          <Typography variant='body2' fontStyle='italic' sx={{ whiteSpace: 'pre-wrap' }}>
+                            “{alert.audio_transcript}”
+                          </Typography>
+                        </Box>
+                      )}
+
+                      {alert.location_url && (
+                        <Box>
+                          <Button
+                            size='small'
+                            variant='outlined'
+                            color='error'
+                            href={alert.location_url}
+                            target='_blank'
+                            rel='noopener noreferrer'
+                            startIcon={<i className='ri-map-pin-line' />}
+                          >
+                            Open where they were
+                          </Button>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))
               )}
             </Box>
           )}

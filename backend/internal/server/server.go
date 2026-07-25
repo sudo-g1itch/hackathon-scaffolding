@@ -133,7 +133,12 @@ func registerRoutes(engine *gin.Engine, h Handlers) {
 
 			recoverai.GET("/dashboard", h.RecoverAI.Dashboard)
 			recoverai.GET("/timeline", h.RecoverAI.Timeline)
+			// Emergency: build the plan, optionally attach a voice note, then
+			// send the chosen script to the linked caregiver.
 			recoverai.POST("/emergency", h.RecoverAI.Emergency)
+			recoverai.POST("/emergency/:logID/note", h.RecoverAI.EmergencyNote)
+			recoverai.POST("/emergency/:logID/alert", h.RecoverAI.EmergencyAlert)
+			recoverai.POST("/emergency/:logID/acknowledge", h.Care.AcknowledgeEmergency)
 
 			recoverai.POST("/coach/chat", h.RecoverAI.CoachChat)
 			recoverai.GET("/coach/history", h.RecoverAI.CoachHistory)

@@ -214,7 +214,7 @@ const ProfilePage = () => {
                 label='Linked caregiver account'
                 value={caregiverId}
                 onChange={event => void handleCaregiverChange(event.target.value)}
-                helperText='A linked caregiver sees your risk level — never your conversations.'
+                helperText='A linked caregiver sees your risk level, can message you, and is who your SOS reaches.'
               >
                 <MenuItem value=''>
                   <em>No caregiver</em>
@@ -235,15 +235,9 @@ const ProfilePage = () => {
                 inputProps={{ maxLength: 150 }}
               />
 
-              <TextField
-                fullWidth
-                label='Caregiver phone'
-                placeholder='+1 555 123 4567'
-                value={form.caregiver_phone}
-                onChange={update('caregiver_phone')}
-                helperText='Used to offer a call or pre-filled SMS during an emergency.'
-                inputProps={{ maxLength: 50 }}
-              />
+              {/* No phone field: AnchorOne reaches a caregiver in-app, and the
+                  app does not place calls or send SMS. Asking for a number it
+                  will never dial would be a promise it cannot keep. */}
 
               <TextField
                 fullWidth

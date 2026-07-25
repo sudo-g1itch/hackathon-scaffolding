@@ -29,12 +29,24 @@ type SupportMessage struct {
 	SenderID   uuid.UUID `gorm:"type:uuid;not null;index" json:"sender_id"`
 	SenderRole string    `gorm:"type:varchar(50);not null" json:"sender_role"`
 
+	// Kind separates an ordinary message from an emergency alert, so the
+	// caregiver's thread can shout about one and not the other. An alert also
+	// carries the EmergencyLog it came from.
+	Kind          string     `gorm:"type:varchar(50);not null;default:'message';index" json:"kind"`
+	EmergencyID   *uuid.UUID `gorm:"type:uuid;index" json:"emergency_id,omitempty"`
+
 	Body string `gorm:"type:text;not null" json:"body"`
 
 	// ReadAt is set when the *other* party opens the thread. Nil means unread,
 	// which is what drives the unread badge on both dashboards.
 	ReadAt *time.Time `json:"read_at,omitempty"`
 }
+
+// Support message kinds.
+const (
+	SupportMessageKindMessage   = "message"
+	SupportMessageKindEmergency = "emergency"
+)
 
 // Recipient returns the user this message was addressed to.
 func (m *SupportMessage) Recipient() uuid.UUID {

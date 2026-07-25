@@ -15,6 +15,8 @@ import type {
   Checkin,
   CoachMessage,
   DashboardData,
+  EmergencyAlert,
+  EmergencyAlertInput,
   EmergencyResult,
   Goal,
   GoalDetail,
@@ -97,6 +99,22 @@ export const anchorOneService = {
 
   triggerEmergency: async (): Promise<EmergencyResult> =>
     unwrap(await axios.post<StandardResponse<EmergencyResult>>('/emergency')),
+
+  /** Attaches a voice note to an alert. Only its transcript is stored. */
+  attachEmergencyNote: async (logId: string, audio: Blob, filename = 'note.webm'): Promise<EmergencyResult> =>
+    unwrap(
+      await axios.post<StandardResponse<EmergencyResult>>(`/emergency/${logId}/note`, audioForm(audio, filename), {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    ),
+
+  /** Sends the chosen script to the linked caregiver. This one really sends. */
+  sendEmergencyAlert: async (logId: string, input: EmergencyAlertInput): Promise<EmergencyResult> =>
+    unwrap(await axios.post<StandardResponse<EmergencyResult>>(`/emergency/${logId}/alert`, input)),
+
+  /** Caregiver confirming they have seen an alert. */
+  acknowledgeEmergency: async (logId: string): Promise<EmergencyAlert> =>
+    unwrap(await axios.post<StandardResponse<EmergencyAlert>>(`/emergency/${logId}/acknowledge`)),
 
   sendCoachMessage: async (message: string): Promise<CoachMessage[]> =>
     unwrap(await axios.post<StandardResponse<CoachMessage[]>>('/coach/chat', { message })),

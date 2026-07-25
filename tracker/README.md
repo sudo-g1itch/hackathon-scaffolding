@@ -282,3 +282,77 @@ it did not work end to end, then completed the missing features.
   either way** → unlinked caregiver refused (403) → plain user refused the
   caregiver list (403) → admin allowed the overview but refused the thread →
   goal auto-completed at target with overshoot clamped.
+
+---
+
+### Session 6: Emergency Mode — a message that actually arrives
+
+**The gap**
+Emergency Mode produced a plan and a script, then stopped. The script could only
+be copied, opened in the OS SMS composer, or dialled — none of which the app can
+observe, so it could never honestly say anything had happened. There was also no
+way to say *where* you are, and no way to speak instead of type at the moment
+speaking is easiest.
+
+**Sending is now real**
+- `POST /emergency/:logID/alert` delivers the chosen script into the caregiver's
+  **support thread** — the one channel the app controls and the caregiver
+  already watches. `SupportMessage` gained `kind` + `emergency_id`, so an alert
+  sits in the conversation but renders as an alert.
+- `POST /emergency/:logID/acknowledge` (caregiver only, and only the linked one)
+  stamps `acknowledged_at`. This is the **only** thing that lets the UI say
+  "they have seen it" — before that it says "sent", and before sending it says
+  nothing has been sent.
+- With no caregiver linked, sending is refused (`422`) with an explanation and
+  a pointer to the recovery plan screen. An alert is never recorded as sent with
+  nobody to send it to.
+
+**Personalised scripts**
+- `model.EmergencyScriptPresets(senderName, caregiverName)` renders five presets
+  ("I need someone", "Strong craving", "I'm not safe", "I slipped", "Just need
+  to talk") already addressed and signed, so a person in crisis never faces a
+  blank box. The AI draft is offered alongside and pre-filled when available;
+  the presets work with no AI key at all.
+- The user can edit any of it before sending; `sent_message` records what was
+  actually said, separately from the AI's `generated_script`.
+
+**Location**
+- A per-alert toggle, not a stored setting. When on, the browser's geolocation
+  is read at send time and rendered through `model.EmergencyLog.LocationURL()` —
+  one definition of the Google Maps link, used by the thread, the caregiver's
+  alert list and the timeline. A refused or unavailable location degrades to
+  sending the message without it, and says so.
+
+**Voice note**
+- Record → Deepgram → **only the transcript is stored**; the audio is not kept.
+  The caregiver reads it inline on the alert.
+- This is consistent with the check-in privacy rule rather than an exception to
+  it: a check-in is the user talking to the app, while this note was recorded
+  specifically in order to be sent to that person.
+
+**SMS and calls removed**
+- No `sms:` links, no `tel:` links, no share sheet, and the caregiver phone
+  field is gone from the recovery plan screen. The app cannot place a call or
+  send a text; a button that hands off to the OS and hopes looks like delivery
+  without being it. The `caregiver_phone` column stays for existing data.
+
+**New surface**
+- API: `POST /emergency/:logID/note`, `POST /emergency/:logID/alert`,
+  `POST /emergency/:logID/acknowledge`. `POST /emergency` now also returns
+  `presets`, `caregiver_linked` and `caregiver_name`.
+- `PatientOverview.emergencies` lists only alerts that were actually sent — a
+  plan the person worked through alone was never addressed to anyone.
+- Migration `0008_emergency_alerts` (idempotent).
+
+**Verification**
+- `go build ./... && go vet ./...`, `npm run lint && type-check && build` — clean.
+- Migration `0008` applied via the containerised migrate service.
+- End-to-end: trigger → 5 personalised presets + AI draft → send with location
+  (`share_location: true`, maps URL correct) → caregiver reads it in the thread
+  as `kind: emergency` with the link → second alert with a **real Deepgram
+  round-trip** voice note (TTS mp3 → transcribe → `"Kim, I am outside the bar on
+  Jumeirah Road…"`) → sent with location off (no coordinates stored) →
+  caregiver overview lists both → acknowledge → sender sees `acknowledged_at` →
+  unrelated caregiver acknowledging refused (403) → user with no caregiver gets
+  personalised presets but a 422 on send → another user touching someone else's
+  emergency gets 404.

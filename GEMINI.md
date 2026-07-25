@@ -136,11 +136,6 @@ router → middleware → handler → service → repository → GORM → Postgr
 - Commit `.env.example`; **never commit** `.env`, secrets, or keys.
 - Optional integrations stay inert when their env is unset.
 
-### 3.9 No Test Files (Backend)
-
-- **Do not create `*_test.go` files** for the backend during this hackathon.
-  We skip tests to save time. Quality is enforced by `go build`, `go vet`,
-  and the frontend linter instead.
 
 ### 3.10 Frontend — Strict Linting & Type Checks
 
@@ -260,7 +255,10 @@ conversation), `care*` (the caregiver's views and shared access rules), and in
 | `POST` | `/voice/speak` | Text → MP3 (**answers `audio/mpeg`, not the JSON envelope**) |
 | `GET` | `/dashboard` | Mood, risk, craving, streak, counts, profile, capabilities |
 | `GET` | `/timeline` | Check-ins + emergencies merged, reverse-chronological |
-| `POST` | `/emergency` | Crisis plan: actions, caregiver SMS, grounding, encouragement |
+| `POST` | `/emergency` | Crisis plan: actions, draft script, presets, grounding, encouragement |
+| `POST` | `/emergency/:logID/note` | Multipart `audio` → a voice note's transcript is attached to the alert |
+| `POST` | `/emergency/:logID/alert` | **Sends** the chosen script (+ optional location) to the linked caregiver |
+| `POST` | `/emergency/:logID/acknowledge` | Caregiver confirming they have seen it |
 | `POST`/`GET` | `/coach/chat`, `/coach/history` | Recovery coach conversation |
 | `POST` | `/education` | Plain-English explainer |
 | `GET`/`PUT` | `/profile` | Recovery goal, substance, caregiver + emergency contacts, sharing consent |
@@ -311,29 +309,47 @@ not a role question. `service.careAccess` answers it (see rule 8 below).
    theirs alone to change. **The raw transcript is never projected at any
    setting** — see `toPatientCheckin`. Widening what a caregiver sees means
    adding another consent flag, not removing this one.
-5. **Never claim an action the app did not take.** Emergency Mode hands the user
-   a ready-to-send message; it does not send it, and the UI says so. Telling
-   someone in crisis that help is coming when it is not is a safety bug.
-6. **Frontend service paths are relative** (`/checkin`, not `/api/v1/checkin`) —
+5. **Never claim an action the app did not take.** Emergency Mode now genuinely
+   delivers — into the caregiver's support thread, which is the only channel the
+   app controls. Each state of the UI must therefore be exactly true:
+   - not sent yet → say nothing has been sent;
+   - sent → say it was delivered to their conversation, nothing more;
+   - **"they have seen it" only after `acknowledged_at` is set** by the
+     caregiver;
+   - no caregiver linked → refuse (`apperr.Unprocessable`) and say why. Never
+     record an alert as sent with nobody to send it to.
+
+   **No SMS, no `tel:` links, no share sheets.** The app cannot place a call or
+   send a text, and a button that hands off to the OS and hopes is not a
+   feature — it looks like delivery without being it. `RecoveryProfile`'s
+   `caregiver_phone` column survives for history but is no longer collected.
+6. **Emergency location and voice notes are per-alert opt-ins.** Location is
+   read only when the user turns the toggle on for that alert, is never stored
+   as a standing preference, and is rendered through
+   `model.EmergencyLog.LocationURL()` — the single definition of the maps link.
+   A voice note is transcribed and **only the transcript is stored**; the audio
+   is not kept. That transcript reaching the caregiver is consistent with rule 4:
+   the user recorded it in order to send it to that person.
+7. **Frontend service paths are relative** (`/checkin`, not `/api/v1/checkin`) —
    the axios `baseURL` already carries `/api/v1`.
-7. **DTOs are mirrored by hand.** `internal/service/{recoverai,goal,support,care}_service.go`
+8. **DTOs are mirrored by hand.** `internal/service/{recoverai,goal,support,care}_service.go`
    and `frontend/src/types/anchorOneTypes.ts` are one contract; change both together.
-8. **Access to a patient's record is link-based, not role-based.**
+9. **Access to a patient's record is link-based, not role-based.**
    `service.careAccess` is the only place that decides it, returning one
    `CareRelation` (`self` / `caregiver` / `admin`) that goals, the overview and
    messaging all check. Holding a `caregiver` account grants nothing until
    somebody chooses you. `RelationAdmin` is deliberately separate: an admin may
    read an overview but is **not** a party to the private conversation. Never
    re-derive this rule with an ad-hoc role check in a handler.
-9. **A caregiver supports; they do not self-report on someone's behalf.** They
+10. **A caregiver supports; they do not self-report on someone's behalf.** They
    may suggest a goal and leave encouragement. Only the person in recovery moves
    their own numbers (`GoalService.LogProgress`). Enforce this in the service —
    the UI hiding a button is a courtesy, not the rule.
-10. **Goal progress has one definition.** `model.RecoveryGoal.ProgressPercent()`,
+11. **Goal progress has one definition.** `model.RecoveryGoal.ProgressPercent()`,
     clamped 0–100. Never recompute a percentage in a handler or a React
     component, and never write a status string inline — use
     `model.GoalStatus*` / `model.GoalCategory*`.
-11. **`frontend/src/configs/navigation.ts` is the single source for who sees what.**
+12. **`frontend/src/configs/navigation.ts` is the single source for who sees what.**
     The sidebar, the horizontal menu, `RouteGuard` and the post-login landing
     path all read it. Adding a screen means adding it there — otherwise it is
     either invisible or reachable by anyone with the URL.
@@ -422,7 +438,6 @@ A change is not complete until:
 
 ## 8. What NOT to Do
 
-- ❌ Do NOT create test files (`*_test.go`) for the backend.
 - ❌ Do NOT use `AutoMigrate` directly. Use gormigrate steps.
 - ❌ Do NOT write queries outside `internal/repository/`.
 - ❌ Do NOT put business logic in handlers.

@@ -31,9 +31,15 @@ type SupportMessageData struct {
 	CaregiverID uuid.UUID  `json:"caregiver_id"`
 	SenderID    uuid.UUID  `json:"sender_id"`
 	SenderRole  string     `json:"sender_role"`
+	Kind        string     `json:"kind"`
 	Body        string     `json:"body"`
 	ReadAt      *time.Time `json:"read_at"`
 	CreatedAt   time.Time  `json:"created_at"`
+
+	// Emergency carries the alert's location link and voice-note transcript,
+	// present only on emergency-kind messages. Inlined so a caregiver reading
+	// the thread has everything without navigating away mid-crisis.
+	Emergency *EmergencyAlertData `json:"emergency,omitempty"`
 }
 
 // SupportThread is the whole conversation plus who is on the other end of it.
@@ -61,6 +67,12 @@ type SupportService interface {
 	GetThread(ctx context.Context, actor Actor, patientID uuid.UUID) (*SupportThread, error)
 	Send(ctx context.Context, actor Actor, patientID uuid.UUID, body string) (*SupportThread, error)
 	MarkRead(ctx context.Context, actor Actor, patientID uuid.UUID) error
+
+	// PostEmergencyAlert delivers a crisis alert into the thread. It skips the
+	// ordinary length and authorisation checks on purpose: the caller has
+	// already established the link, and an alert is composed from a stored
+	// EmergencyLog rather than from user input arriving over the wire.
+	PostEmergencyAlert(ctx context.Context, patientID, caregiverID uuid.UUID, entry *model.EmergencyLog) error
 
 	// UnreadForUser counts everything waiting for this person, whichever side
 	// of the conversation they are on. Drives the navigation badge.
@@ -148,6 +160,7 @@ func (s *supportService) Send(
 		CaregiverID: *caregiverID,
 		SenderID:    actor.ID,
 		SenderRole:  relation.AuthorRole(),
+		Kind:        model.SupportMessageKindMessage,
 		Body:        body,
 	}
 	if err := s.messages.Create(ctx, msg); err != nil {
@@ -171,6 +184,27 @@ func (s *supportService) Send(
 	thread.Unread = 0
 
 	return thread, nil
+}
+
+func (s *supportService) PostEmergencyAlert(
+	ctx context.Context,
+	patientID, caregiverID uuid.UUID,
+	entry *model.EmergencyLog,
+) error {
+	msg := &model.SupportMessage{
+		PatientID:   patientID,
+		CaregiverID: caregiverID,
+		SenderID:    patientID,
+		SenderRole:  model.AuthorRoleUser,
+		Kind:        model.SupportMessageKindEmergency,
+		EmergencyID: &entry.ID,
+		Body:        entry.SentMessage,
+	}
+
+	if err := s.messages.Create(ctx, msg); err != nil {
+		return apperr.Internal(err)
+	}
+	return nil
 }
 
 func (s *supportService) MarkRead(ctx context.Context, actor Actor, patientID uuid.UUID) error {
@@ -292,19 +326,41 @@ func (s *supportService) buildThread(
 
 	thread.Messages = make([]SupportMessageData, 0, len(messages))
 	for i := range messages {
-		thread.Messages = append(thread.Messages, toSupportMessageData(&messages[i]))
+		data := toSupportMessageData(&messages[i])
+
+		// Only emergency messages carry a log, and a thread holds very few of
+		// them, so loading them one by one is cheaper than a join that would
+		// run for every ordinary message too.
+		if messages[i].EmergencyID != nil {
+			entry, err := s.profiles.GetEmergencyLog(ctx, *messages[i].EmergencyID)
+			if err != nil {
+				return nil, apperr.Internal(err)
+			}
+			if entry != nil {
+				alert := ToEmergencyAlertData(entry)
+				data.Emergency = &alert
+			}
+		}
+
+		thread.Messages = append(thread.Messages, data)
 	}
 
 	return thread, nil
 }
 
 func toSupportMessageData(msg *model.SupportMessage) SupportMessageData {
+	kind := msg.Kind
+	if kind == "" {
+		kind = model.SupportMessageKindMessage
+	}
+
 	return SupportMessageData{
 		ID:          msg.ID,
 		PatientID:   msg.PatientID,
 		CaregiverID: msg.CaregiverID,
 		SenderID:    msg.SenderID,
 		SenderRole:  msg.SenderRole,
+		Kind:        kind,
 		Body:        msg.Body,
 		ReadAt:      msg.ReadAt,
 		CreatedAt:   msg.CreatedAt,

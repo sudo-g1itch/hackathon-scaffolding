@@ -38,6 +38,8 @@ type RecoverAIRepository interface {
 
 	// Emergency
 	CreateEmergencyLog(ctx context.Context, log *model.EmergencyLog) error
+	GetEmergencyLog(ctx context.Context, logID uuid.UUID) (*model.EmergencyLog, error)
+	UpdateEmergencyLog(ctx context.Context, log *model.EmergencyLog) error
 	ListEmergencyLogs(ctx context.Context, userID uuid.UUID, limit int) ([]model.EmergencyLog, error)
 	CountEmergencyLogs(ctx context.Context, userID uuid.UUID) (int64, error)
 
@@ -192,6 +194,37 @@ func (r *recoverAIRepository) GetCoachHistory(
 
 func (r *recoverAIRepository) CreateEmergencyLog(ctx context.Context, log *model.EmergencyLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *recoverAIRepository) GetEmergencyLog(
+	ctx context.Context,
+	logID uuid.UUID,
+) (*model.EmergencyLog, error) {
+	var entry model.EmergencyLog
+
+	err := r.db.WithContext(ctx).Where("id = ?", logID).First(&entry).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &entry, nil
+}
+
+// UpdateEmergencyLog writes only the columns the send flow touches. The plan
+// itself (actions, grounding, encouragement) is a record of what was generated
+// and is never rewritten afterwards.
+func (r *recoverAIRepository) UpdateEmergencyLog(ctx context.Context, log *model.EmergencyLog) error {
+	return r.db.WithContext(ctx).
+		Model(&model.EmergencyLog{}).
+		Where("id = ?", log.ID).
+		Select(
+			"sent_message", "shared_at", "caregiver_id", "share_location",
+			"location_lat", "location_lng", "audio_transcript",
+			"acknowledged_at", "updated_at",
+		).
+		Updates(log).Error
 }
 
 func (r *recoverAIRepository) ListEmergencyLogs(

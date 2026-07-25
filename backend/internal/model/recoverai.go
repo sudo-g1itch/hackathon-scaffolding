@@ -1,7 +1,9 @@
 package model
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -115,6 +117,12 @@ type CoachMessage struct {
 
 // EmergencyLog records a triggered crisis intervention and the full plan that
 // was generated for it, so the timeline can replay exactly what the user saw.
+//
+// The fields below GeneratedScript record what the user then chose to DO with
+// that plan: which words they actually sent, whether they attached their
+// location, and the voice note they recorded. Nothing there is filled in unless
+// they pressed send — a triggered emergency that the user worked through alone
+// is still a valid, complete record.
 type EmergencyLog struct {
 	BaseModel
 	UserID             uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
@@ -123,4 +131,100 @@ type EmergencyLog struct {
 	GeneratedScript    string    `gorm:"type:text" json:"generated_script"`
 	GroundingExercise  string    `gorm:"type:text" json:"grounding_exercise"`
 	EncouragingMessage string    `gorm:"type:text" json:"encouraging_message"`
+
+	// SentMessage is the script as sent — a preset, the AI draft, or the user's
+	// own words. Stored separately from GeneratedScript so the record shows
+	// what was said, not what was suggested.
+	SentMessage string     `gorm:"type:text" json:"sent_message"`
+	SharedAt    *time.Time `json:"shared_at,omitempty"`
+	CaregiverID *uuid.UUID `gorm:"type:uuid;index" json:"caregiver_id,omitempty"`
+
+	// Location is attached only when the user turns the toggle on. Nil lat/lng
+	// means they did not share it — the app never reads location otherwise.
+	ShareLocation bool     `gorm:"not null;default:false" json:"share_location"`
+	LocationLat   *float64 `json:"location_lat,omitempty"`
+	LocationLng   *float64 `json:"location_lng,omitempty"`
+
+	// AudioTranscript is the voice note the user recorded to send. Unlike a
+	// check-in transcript — which is private by default — this exists only
+	// because the user recorded it explicitly in order to send it.
+	AudioTranscript string `gorm:"type:text" json:"audio_transcript"`
+
+	// AcknowledgedAt is stamped when the caregiver confirms they have seen it,
+	// which is the only honest way for the app to tell the user help is coming.
+	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+}
+
+// mapsURLTemplate builds a link any phone or desktop can open. Defined once so
+// the alert message, the caregiver's list and the timeline agree.
+const mapsURLTemplate = "https://www.google.com/maps/search/?api=1&query=%f,%f"
+
+// LocationURL returns a Google Maps link for a shared location, or "" when the
+// user did not share one.
+func (e *EmergencyLog) LocationURL() string {
+	if !e.ShareLocation || e.LocationLat == nil || e.LocationLng == nil {
+		return ""
+	}
+	return fmt.Sprintf(mapsURLTemplate, *e.LocationLat, *e.LocationLng)
+}
+
+// EmergencyScript is one ready-to-send message.
+type EmergencyScript struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Body  string `json:"body"`
+}
+
+// emergencyScriptTemplates are the presets offered alongside the AI draft.
+//
+// They exist because the AI is optional and because a person in crisis should
+// not have to compose a sentence. %[1]s is the sender's first name, %[2]s the
+// name they address their caregiver by.
+var emergencyScriptTemplates = []struct {
+	id, label, body string
+}{
+	{
+		"reach-out", "I need someone",
+		"%[2]s, it's %[1]s. I'm struggling right now and I don't want to be alone. Can you reply or come over?",
+	},
+	{
+		"craving", "Strong craving",
+		"%[2]s, it's %[1]s. I'm having a really strong craving and I'm scared I'll act on it. Please talk to me.",
+	},
+	{
+		"unsafe", "I'm not safe",
+		"%[2]s, it's %[1]s. I don't feel safe right now. Please come and find me as soon as you can.",
+	},
+	{
+		"slipped", "I slipped",
+		"%[2]s, it's %[1]s. I slipped and I didn't want to hide it from you. I want to get back on track.",
+	},
+	{
+		"just-talk", "Just need to talk",
+		"%[2]s, it's %[1]s. Nothing has happened yet, but it's a hard night. Can we talk for a few minutes?",
+	},
+}
+
+// EmergencyScriptPresets renders the presets for one person, so what the user
+// sees is already addressed and signed rather than a fill-in-the-blank form.
+func EmergencyScriptPresets(senderName, caregiverName string) []EmergencyScript {
+	sender := strings.TrimSpace(senderName)
+	if sender == "" {
+		sender = "your friend"
+	}
+
+	caregiver := strings.TrimSpace(caregiverName)
+	if caregiver == "" {
+		caregiver = "Hi"
+	}
+
+	scripts := make([]EmergencyScript, 0, len(emergencyScriptTemplates))
+	for _, t := range emergencyScriptTemplates {
+		scripts = append(scripts, EmergencyScript{
+			ID:    t.id,
+			Label: t.label,
+			Body:  fmt.Sprintf(t.body, sender, caregiver),
+		})
+	}
+	return scripts
 }

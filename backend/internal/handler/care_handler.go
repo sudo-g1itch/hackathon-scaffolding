@@ -138,6 +138,28 @@ func (h *CareHandler) MarkRead(c *gin.Context) {
 	response.NoContent(c)
 }
 
+// POST /api/v1/emergency/:logID/acknowledge — the caregiver confirming they
+// have seen an alert. Only then can the app tell the sender somebody is there.
+func (h *CareHandler) AcknowledgeEmergency(c *gin.Context) {
+	actor, ok := actorFrom(c)
+	if !ok {
+		return
+	}
+
+	logID, ok := uuidParam(c, "logID")
+	if !ok {
+		return
+	}
+
+	alert, err := h.care.AcknowledgeEmergency(c.Request.Context(), actor, logID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.OK(c, alert)
+}
+
 // GET /api/v1/messages/unread — one number for the navigation badge, whichever
 // side of the conversation the caller is on.
 func (h *CareHandler) UnreadCount(c *gin.Context) {
