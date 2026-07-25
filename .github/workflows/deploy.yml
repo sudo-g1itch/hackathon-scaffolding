@@ -39,7 +39,10 @@ jobs:
           DATABASE_USER=hackathon
           DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
           DATABASE_NAME=hackathon
-          DATABASE_SSL_MODE=disable
+          # prefer = try TLS, fall back to plaintext on the internal Docker
+          # network. Production config forbids sslmode=disable; the bundled
+          # Postgres has no TLS, so 'require' can't connect — 'prefer' does.
+          DATABASE_SSL_MODE=prefer
           DATABASE_PORT=5432
           LOG_LEVEL=info
           LOG_FORMAT=json

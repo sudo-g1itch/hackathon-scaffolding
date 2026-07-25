@@ -9,6 +9,13 @@
 # sets it as a runtime env var, which Next ignores for NEXT_PUBLIC_* values).
 
 services:
+  # In production the API config requires app.auto_migrate=false. The api
+  # service already sets it; the migrate one-off needs it too (its default
+  # is true, which fails the production config guard).
+  migrate:
+    environment:
+      APP_AUTO_MIGRATE: "false"
+
   web:
     build:
       args:
