@@ -26,6 +26,7 @@ func All() []*gormigrate.Migration {
 		m0006ExtendRecoveraiTables(),
 		m0007CreateRecoveryPlanTables(),
 		m0008EmergencyAlerts(),
+		m0009DropGoalProfileFK(),
 	}
 }
 

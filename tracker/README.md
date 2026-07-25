@@ -356,3 +356,53 @@ speaking is easiest.
   unrelated caregiver acknowledging refused (403) → user with no caregiver gets
   personalised presets but a 422 on send → another user touching someone else's
   emergency gets 404.
+
+---
+
+### Session 6b: Fixing the deploy — two migration bugs only a fresh database exposes
+
+The Session 6 deploy failed at migration `0005`, and the investigation turned up
+a second, worse bug behind it. Both come from the same root cause.
+
+**Root cause: step `0004` AutoMigrates the LIVE model structs**, not a snapshot
+of how they looked when it was written. On a database created today it therefore
+emits columns and constraints that later steps also expect to create. Existing
+databases never hit this, because those steps ran long ago — which is exactly
+why it stayed hidden until production came up on a fresh volume
+(`already_applied: 3`).
+
+**Bug 1 — `0005` could not run at all on a new database.**
+`0004` now creates `caregiver_id` *and* a `fk_recovery_profiles_caregiver`
+constraint (the model gained the `Caregiver` belongs-to since). `0005`'s bare
+`ADD CONSTRAINT` then died with SQLSTATE 42710, blocking every later step.
+
+Fixed by making `0005` `DROP CONSTRAINT IF EXISTS` before adding — which also
+matters on its own merits, since AutoMigrate's version has no `ON DELETE` clause
+and would block deleting a caregiver account instead of unlinking the people
+they support. This edits an applied migration, which rule 3.7 forbids; it is the
+one case the rule cannot cover, because the step is unrunnable on a fresh
+database and no later step can repair it. The edit is a no-op wherever `0005`
+already succeeded.
+
+**Bug 2 — a new user could not create their first goal.**
+`RecoveryProfile.Goals` (added so open goals can be preloaded into AI prompts)
+made GORM emit `fk_recovery_profiles_goals: recovery_goals.user_id ->
+recovery_profiles.user_id`. As a constraint that asserts something the app does
+not mean: *a goal may only exist if its owner already has a profile row.* Anyone
+who opened "My Goals" before touching their recovery plan would have their first
+goal rejected by Postgres.
+
+The Session 5 end-to-end run missed it because that user linked a caregiver
+first, which creates a profile row as a side effect. Migration `0009` drops the
+accidental constraint; `fk_recovery_goals_user` (→ `users.id`, `ON DELETE
+CASCADE`) was already the correct rule and remains the only one.
+
+**Verification**
+- All 9 migrations applied against a **virgin Postgres** (`applied_now: 9`), and
+  every foreign key in the resulting schema audited by hand — one bogus
+  constraint found, none left.
+- The exact failing case reproduced before the fix and re-run after: a
+  brand-new account with no profile row now creates a goal and loads its
+  dashboard through the real API.
+- Local stack rebuilt and healthy on `20000`/`20080`; certbot renewal dry-run
+  for `anchorone.dcix.in` passes, timer active.
