@@ -5,11 +5,15 @@ import { useTheme } from '@mui/material/styles'
 import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
 // Component Imports
-import HorizontalNav, { Menu, MenuItem } from '@menu/horizontal-menu'
+import HorizontalNav, { Menu, MenuItem, SubMenu } from '@menu/horizontal-menu'
 import VerticalNavContent from './VerticalNavContent'
+
+// Config Imports
+import { navigationFor } from '@/configs/navigation'
 
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
+import { useAuth } from '@/contexts/AuthContext'
 
 // Styled Component Imports
 import StyledHorizontalNavExpandIcon from '@menu/styles/horizontal/StyledHorizontalNavExpandIcon'
@@ -46,9 +50,13 @@ const HorizontalMenu = () => {
   // Hooks
   const verticalNavOptions = useVerticalNav()
   const theme = useTheme()
+  const { user } = useAuth()
 
   // Vars
   const { transitionDuration } = verticalNavOptions
+
+  // Same navigation config as the sidebar — one definition of who sees what.
+  const sections = navigationFor(user?.role)
 
   return (
     <HorizontalNav
@@ -76,12 +84,15 @@ const HorizontalMenu = () => {
           renderExpandedMenuItemIcon: { icon: <i className='ri-circle-fill' /> }
         }}
       >
-        <MenuItem href='/' icon={<i className='ri-home-smile-line' />}>
-          Home
-        </MenuItem>
-        <MenuItem href='/about' icon={<i className='ri-information-line' />}>
-          About
-        </MenuItem>
+        {sections.map(section => (
+          <SubMenu key={section.label} label={section.label}>
+            {section.items.map(item => (
+              <MenuItem key={item.href} href={item.href} icon={<i className={item.icon} />}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </SubMenu>
+        ))}
       </Menu>
       {/* <Menu
         rootStyles={menuRootStyles(theme)}

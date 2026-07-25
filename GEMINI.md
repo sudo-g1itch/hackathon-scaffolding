@@ -231,6 +231,127 @@ Before building any UI screen, **reuse these canonical helpers**:
 
 ---
 
+## 4.5 AnchorOne domain (the product)
+
+AnchorOne is an AI recovery companion: voice check-in → risk detection →
+intervention, around a recovery plan the person and their caregiver both work on.
+
+**Two people use it, and they see different apps.**
+
+| | Person in recovery (`user`) | Caregiver (`caregiver`) |
+|---|---|---|
+| Sees | Dashboard, check-ins, AI coach, timeline, their goals, their caregiver | The people who chose them, each one's signals + plan, the conversation |
+| Does | Checks in, logs goal progress, messages their caregiver | Watches risk, suggests goals, encourages, messages |
+| Never sees | The caregiver's other people | Transcripts; summaries unless the user consents |
+
+The feature code lives in `internal/{model,repository,service,handler}/` under
+`recoverai*` (the user's own recovery), `goal*` (the plan), `support*` (the
+conversation), `care*` (the caregiver's views and shared access rules), and in
+`frontend/src/{app/(dashboard)/anchor-one,components/anchor-one}`.
+
+### API surface (all under `/api/v1`, all authenticated)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/capabilities` | Which AI integrations have keys — the UI disables features accordingly |
+| `POST` | `/checkin` | Voice check-in: multipart `audio` → Deepgram → Gemini → stored `Checkin` |
+| `POST` | `/risk` | Typed check-in — same analysis, no microphone |
+| `POST` | `/voice/transcribe` | Speech → text only |
+| `POST` | `/voice/speak` | Text → MP3 (**answers `audio/mpeg`, not the JSON envelope**) |
+| `GET` | `/dashboard` | Mood, risk, craving, streak, counts, profile, capabilities |
+| `GET` | `/timeline` | Check-ins + emergencies merged, reverse-chronological |
+| `POST` | `/emergency` | Crisis plan: actions, caregiver SMS, grounding, encouragement |
+| `POST`/`GET` | `/coach/chat`, `/coach/history` | Recovery coach conversation |
+| `POST` | `/education` | Plain-English explainer |
+| `GET`/`PUT` | `/profile` | Recovery goal, substance, caregiver + emergency contacts, sharing consent |
+| `GET` | `/caregivers`, `PUT` `/profile/caregiver` | List / link (or unlink with `null`) a caregiver |
+| `GET` | `/caregiver` | The caregiver's list of everyone who chose them — **`caregiver` or `admin` role only** |
+
+#### Recovery plan — the caller's own goals
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`/`POST` | `/goals` | List / add goals |
+| `GET` | `/goals/summary` | Counts + average progress + next goal (the dashboard roll-up) |
+| `GET`/`PUT`/`DELETE` | `/goals/:goalID` | A goal and its progress feed |
+| `POST` | `/goals/:goalID/progress` | Log a step, a note, or (from a caregiver) encouragement |
+
+#### Patient-scoped — the caller's own record *or* someone they support
+
+**No route-level role guard, on purpose.** Who may read a given person's record
+depends on whether that person linked this caregiver, which is a data question,
+not a role question. `service.careAccess` answers it (see rule 8 below).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/patients/:patientID` | Signals + check-in history + goals + plan summary |
+| `GET`/`POST` | `/patients/:patientID/goals` | Read the plan / a caregiver suggesting a goal |
+| `GET`/`POST` | `/patients/:patientID/messages` | The shared conversation (reading marks it read) |
+| `POST` | `/patients/:patientID/messages/read` | Clear the badge without loading the thread |
+| `GET` | `/messages/unread` | One number for the navigation badge |
+
+### Rules specific to this domain
+
+1. **AI integrations are optional.** A missing `AI_GEMINI_API_KEY` or
+   `AI_DEEPGRAM_API_KEY` disables that feature (503 with an explanation via
+   `apperr.Unavailable`) and **must never stop the API from booting.** Never add
+   an AI key to `config.Validate()` as a required field.
+2. **Never trust model output's shape.** Every JSON-returning Gemini call sends a
+   `responseSchema` (see `checkinAnalysisSchema`, `emergencyPlanSchema`). Without
+   it Gemini returns `craving` as prose and `risk` in mixed case, which breaks
+   unmarshalling and every risk comparison. `model.NormalizeRisk` and
+   `model.ClampCraving` are the second line of defence — keep using them.
+3. **Risk levels and coach roles are constants** (`model.RiskLow/Medium/High`,
+   `model.CoachRoleUser/AI`). Never write the string literals inline.
+4. **Caregiver privacy is consent-gated, and the default is private.**
+   `service.CaregiverPatient` (in `care_service.go`) still carries no transcript,
+   summary or triggers. A check-in's *narrative* reaches a caregiver through
+   `PatientOverview` only when the user has switched on
+   `RecoveryProfile.ShareCheckinDetails`, which defaults to `false` and is
+   theirs alone to change. **The raw transcript is never projected at any
+   setting** — see `toPatientCheckin`. Widening what a caregiver sees means
+   adding another consent flag, not removing this one.
+5. **Never claim an action the app did not take.** Emergency Mode hands the user
+   a ready-to-send message; it does not send it, and the UI says so. Telling
+   someone in crisis that help is coming when it is not is a safety bug.
+6. **Frontend service paths are relative** (`/checkin`, not `/api/v1/checkin`) —
+   the axios `baseURL` already carries `/api/v1`.
+7. **DTOs are mirrored by hand.** `internal/service/{recoverai,goal,support,care}_service.go`
+   and `frontend/src/types/anchorOneTypes.ts` are one contract; change both together.
+8. **Access to a patient's record is link-based, not role-based.**
+   `service.careAccess` is the only place that decides it, returning one
+   `CareRelation` (`self` / `caregiver` / `admin`) that goals, the overview and
+   messaging all check. Holding a `caregiver` account grants nothing until
+   somebody chooses you. `RelationAdmin` is deliberately separate: an admin may
+   read an overview but is **not** a party to the private conversation. Never
+   re-derive this rule with an ad-hoc role check in a handler.
+9. **A caregiver supports; they do not self-report on someone's behalf.** They
+   may suggest a goal and leave encouragement. Only the person in recovery moves
+   their own numbers (`GoalService.LogProgress`). Enforce this in the service —
+   the UI hiding a button is a courtesy, not the rule.
+10. **Goal progress has one definition.** `model.RecoveryGoal.ProgressPercent()`,
+    clamped 0–100. Never recompute a percentage in a handler or a React
+    component, and never write a status string inline — use
+    `model.GoalStatus*` / `model.GoalCategory*`.
+11. **`frontend/src/configs/navigation.ts` is the single source for who sees what.**
+    The sidebar, the horizontal menu, `RouteGuard` and the post-login landing
+    path all read it. Adding a screen means adding it there — otherwise it is
+    either invisible or reachable by anyone with the URL.
+
+### AI configuration
+
+| Env | Default | Notes |
+|---|---|---|
+| `AI_GEMINI_API_KEY` | *(empty)* | Unset ⇒ analysis, coach, emergency, education disabled |
+| `AI_GEMINI_MODEL` | `gemini-3.5-flash` | `gemini-1.5-flash` is **retired** and 404s |
+| `AI_DEEPGRAM_API_KEY` | *(empty)* | Unset ⇒ transcription and playback disabled |
+| `AI_DEEPGRAM_STT_MODEL` | `nova-2` | |
+| `AI_DEEPGRAM_TTS_MODEL` | `aura-asteria-en` | |
+| `AI_REQUEST_TIMEOUT` | `60s` | Applied to the provider HTTP clients |
+| `AI_MAX_AUDIO_BYTES` | `10485760` | Upload cap for a check-in recording |
+
+---
+
 ## 5. Running the Project
 
 ### Full stack (Docker)
@@ -355,7 +476,34 @@ so all jobs use the self-hosted runner (no GitHub-hosted minutes).
   systemctl status  actions.runner.sudo-g1itch-hackathon-scaffolding.hackathon-interserver-dev.service
   systemctl restart actions.runner.sudo-g1itch-hackathon-scaffolding.hackathon-interserver-dev.service
   ```
-- **Deployed URLs:** web → `http://69.164.244.74:20000`, API → `http://69.164.244.74:20080`.
+- **Public URL: `https://anchorone.dcix.in`** — this is the address to use.
+  The direct ports (`http://69.164.244.74:20000` / `:20080`) still answer, but
+  the browser app is built for the HTTPS origin.
+
+### 9.2.1 TLS & the public domain
+
+nginx on the same server terminates TLS and proxies to the containers. The vhost
+is **its own file**, `/etc/nginx/conf.d/anchorone.conf` — every other site on this
+box lives in the shared `default.conf`, so keep AnchorOne out of it.
+
+```
+https://anchorone.dcix.in/       → 127.0.0.1:20000   (Next.js)
+https://anchorone.dcix.in/api/   → 127.0.0.1:20080   (Go API)
+http://anchorone.dcix.in/        → 301 to https
+```
+
+- **Certificate:** Let's Encrypt, issued and auto-renewed by certbot using the
+  webroot shared with the other vhosts:
+  ```bash
+  certbot certonly --webroot -w /var/www/letsencrypt -d anchorone.dcix.in
+  ```
+- The `/api/` block sets `client_max_body_size 12m` (a voice check-in uploads up
+  to `AI_MAX_AUDIO_BYTES`, and the proxy's 1 MB default would reject it) and
+  120s read/send timeouts (Gemini and Deepgram calls outlast the 60s default).
+- **`NEXT_PUBLIC_API_URL` must stay `https://`.** A page served over HTTPS may
+  not call an `http://` API — the browser blocks it as mixed content — and the
+  value is baked in at *build* time, so changing it needs a rebuild, not a
+  restart.
 
 ### 9.3 Production vs. development compose
 
@@ -385,6 +533,11 @@ If you add new production guards in `internal/config`, **update the `.env` block
 
 - Repo secret **`DATABASE_PASSWORD`** (GitHub → Settings → Secrets) is injected into
   the production `.env` at deploy time. Never hard-code it.
+- Repo secrets **`AI_GEMINI_API_KEY`** and **`AI_DEEPGRAM_API_KEY`** are injected the
+  same way. They are **optional**: if unset the deploy still succeeds and the API
+  boots with those features disabled (it logs a warning at startup naming each
+  missing key). Add them under GitHub → Settings → Secrets to enable the AI demo
+  in production.
 - The production `.env` is generated fresh each deploy inside `deploy.yml`
   (`git clean` wipes it between runs) — do **not** rely on a hand-placed `.env` on
   the server.

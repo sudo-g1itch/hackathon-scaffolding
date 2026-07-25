@@ -88,3 +88,197 @@ This directory tracks all tasks, features, architectural decisions, and session 
 - **Quality & Stack Verification:**
   - `npm run type-check && npm run lint` — Passed with 0 errors.
   - `make up` — Docker stack built and started all containers cleanly.
+
+---
+
+### Session 6: Next.js Security Patch (RCE Fix)
+- **Frontend Dependency Update:**
+  - Upgraded Next.js from `16.0.4` to `latest` in `frontend/package.json` to mitigate a Remote Code Execution (RCE) vulnerability.
+  - Re-ran `npm install` to update lockfiles.
+
+---
+
+### Session 7: AnchorOne Recovery Platform — PRD Implementation & Remediation
+
+Audited the existing AnchorOne feature set against the PRD and fixed the reasons
+it did not work end to end, then completed the missing features.
+
+**Blocking defects found and fixed**
+- **Gemini model 404'd.** `gemini-1.5-flash` is no longer served for this key, so
+  *every* AI feature failed. Now `gemini-3.5-flash` (configurable via
+  `AI_GEMINI_MODEL`), verified live.
+- **Untyped AI output.** Gemini answered `craving` as prose ("Moderate-to-High")
+  and `risk` in mixed case, which failed to unmarshal into `Craving int` and
+  broke every `risk === 'HIGH'` comparison. Fixed with Gemini **response
+  schemas** (`INTEGER` + risk `enum`), plus `model.NormalizeRisk` /
+  `model.ClampCraving` as a safety net.
+- **Frontend called the wrong URLs.** `anchorOneService` prefixed `/api/v1`,
+  which the axios `baseURL` already carries — every request resolved to
+  `/api/v1/api/v1/...` and 404'd. Paths are now relative like every other service.
+- **Production deploy could not boot.** `config.Validate()` hard-required both AI
+  keys while `deploy.yml` never wrote them. Keys are now **optional** (rule 3.8);
+  `deploy.yml` passes `AI_GEMINI_API_KEY` / `AI_DEEPGRAM_API_KEY` secrets.
+- **Emergency Mode 500'd for new users.** It required a pre-existing
+  `recovery_profiles` row, and no endpoint could create one. Profiles are now
+  created on demand and there is full profile CRUD.
+- **Emergency Mode lied.** The UI claimed "Your caregiver has been notified" when
+  nothing was sent, and never rendered `emergency_sms` at all.
+- **Coach double-sent each message.** History was read *after* saving the new
+  turn, so the model saw it twice. History is now read first.
+- **`GetLastCheckin` returned a zero-valued struct** with its error, so a user
+  with no check-ins looked like one with an empty check-in on the caregiver
+  dashboard. Lookups now return `(nil, nil)` when absent.
+- **AI output was silently dropped:** `recommended_actions` (check-ins) and
+  `grounding_exercise` / `encouraging_message` (emergencies) were generated,
+  shown once, then discarded. Persisted via migration `0006`.
+- **Recovery streak was hardcoded to `0`.** Now computed from distinct check-in
+  days (`CheckinDays` + `calculateStreak`).
+- No timeouts on any Gemini/Deepgram call (`http.DefaultClient`); unbounded audio
+  upload; the API key was passed in the URL query string.
+
+**Features completed**
+- `POST /voice/transcribe`, `POST /voice/speak` (Deepgram TTS was dead code — no
+  route existed), `POST /risk` (typed check-in), `GET|PUT /profile`,
+  `GET /coach/history`, `GET /capabilities`.
+- Timeline is now one merged reverse-chronological feed, not two lists.
+- Emergency Mode renders the caregiver script with Copy / Speak / SMS / Call, and
+  states plainly that nothing has been sent yet.
+- Voice check-in narrates record → transcribe → analyse and shows the result
+  (risk, craving, triggers, actions), with a typed fallback.
+- New `/anchor-one/profile` screen: goal, substance, caregiver + emergency
+  contacts — the personalisation every prompt depends on.
+- Spoken playback (`SpeakButton`) on plans, coach replies and education answers.
+
+**Architecture & privacy**
+- Replaced `map[string]interface{}` payloads with typed DTOs mirrored one-for-one
+  by `frontend/src/types/anchorOneTypes.ts`.
+- Caregiver dashboard restricted to `caregiver`/`admin` via `RequireRole`, and
+  its DTO carries **no transcript, summary or triggers** — the PRD's privacy
+  guarantee is enforced in the type, not by the UI choosing what to render.
+- Added `apperr.CodeUnavailable` → HTTP 503 so a missing/failing integration is
+  explained rather than surfacing as a generic 500; `response.Error` now
+  sanitizes only `CodeInternal`.
+- Migration `0006_extend_recoverai_tables` (idempotent — step 0004 AutoMigrates
+  live model structs) plus composite indexes for the dashboard/streak queries.
+
+**Verification**
+- `go build ./... && go vet ./...` — clean.
+- `npm run lint && npm run type-check` — 0 errors (also fixed 27 pre-existing
+  lint errors).
+- End-to-end against **real Gemini + Deepgram**: profile → caregiver link →
+  text check-in (`risk: HIGH`, `craving: 9` as an int) → emergency plan
+  (persisted) → 2-turn coach (no duplication) → education → dashboard → merged
+  timeline → caregiver view (403 for non-caregivers, no private data) → TTS
+  (`audio/mpeg`) → **full voice pipeline** (TTS mp3 → Deepgram → Gemini) →
+  silence/validation guards (422).
+- Full stack rebuilt via `docker compose up -d --build`; all five AnchorOne
+  screens plus the emergency and check-in flows driven in headless Chromium with
+  zero console errors.
+
+---
+
+### Session 5: Recovery Plan (Multi-Goal), Caregiver Workflow & Role-Gated UI
+
+**The gaps this session closed**
+- The "recovery plan" was a single free-text sentence on the profile. There was
+  no way to state more than one commitment, no target, no progress, no history.
+- The caregiver role had a read-only risk table and nothing else: no way to see
+  a person's plan or check-in history, and no way to say anything to them.
+- Every signed-in account saw every screen. A caregiver was shown a personal
+  check-in dashboard they have no data for; a user was shown Admin & RBAC.
+
+**Recovery plan — many goals per person**
+- `model.RecoveryGoal` — title, description, category, status, `current/target`
+  value + unit, optional target date. `ProgressPercent()` is the single
+  definition of "how far along", clamped 0–100 so a lowered target cannot report
+  340%.
+- `model.GoalUpdate` — one chronological feed carrying progress steps, the
+  user's own notes and a caregiver's encouragement, each stamped with its author
+  and role.
+- Status vocabulary (`active`/`completed`/`paused`/`archived`) and categories are
+  constants with `ValidGoalStatus` / `ValidGoalCategory` whitelists.
+- A goal auto-completes on reaching its target and reopens if the target is
+  raised (`settleCompletion`), so a plan can never show "done" at 60%.
+- Open goals are preloaded into `RecoveryProfile.Goals` and rendered into every
+  Gemini prompt by `goalContext()` — the coach now knows what the person is
+  actually working on, not just which substance they named.
+
+**Caregiver workflow**
+- `service.CareService` — `ListPatients` and `GetPatientOverview` (signals +
+  check-in history + goals + plan summary), composing `GoalService` and
+  `SupportService` so progress is computed in exactly one place.
+- `model.SupportMessage` — the private two-person conversation, keyed by the
+  `(patient, caregiver)` pair. Both sides read and write the same thread;
+  opening it marks the other side's messages read, which drives the unread badge
+  on both dashboards.
+- A caregiver may **suggest** a goal and leave encouragement, but may not move
+  someone else's numbers — enforced in `GoalService.LogProgress`, not the UI.
+- `CaregiverPatient` gained plan progress and unread counts; it still carries no
+  transcript, summary or trigger.
+
+**Privacy — consent replaces a blanket rule**
+- New `recovery_profiles.share_checkin_details` (defaults **false**). A caregiver
+  always sees risk, mood, craving and streak; they see a check-in's *summary and
+  triggers only if the person switched sharing on themselves*, from their
+  recovery plan screen. The raw transcript is never projected at any setting
+  (`toPatientCheckin`).
+- This is the deliberate decision GEMINI.md rule 4.5.4 asks for: the caregiver
+  view widened, but only by the user's own choice.
+
+**Authorisation**
+- `service.careAccess` resolves one `CareRelation` (`self` / `caregiver` /
+  `admin`) used by goals, the overview and messaging alike. The check is
+  **link-based, not role-based**: holding a caregiver account grants nothing
+  until someone chooses you.
+- `/patients/:patientID/*` therefore carries no route-level role guard — a role
+  check would be either too loose or redundant. An admin may read an overview
+  but is refused the private thread.
+
+**Role-gated UI**
+- `frontend/src/configs/navigation.ts` is the single source for who sees what.
+  The sidebar, the horizontal menu, the new `RouteGuard` and the post-login
+  landing path all read it, so a hidden screen is also an unreachable one.
+- `user`/`manager` → recovery suite; `caregiver` → People I Support + messages;
+  `admin` → administration + caregiver oversight; Education is open to all.
+- Deleted the stale `data/navigation/*MenuData.tsx` (they still pointed at the
+  removed `/home` and `/about` pages).
+
+**New surface**
+- API: `GET|POST /goals`, `GET /goals/summary`, `GET|PUT|DELETE /goals/:goalID`,
+  `POST /goals/:goalID/progress`, `GET /patients/:patientID`,
+  `GET|POST /patients/:patientID/goals`,
+  `GET|POST /patients/:patientID/messages`,
+  `POST /patients/:patientID/messages/read`, `GET /messages/unread`.
+  `GET /caregiver` moved from `RecoverAIHandler` to `CareHandler`.
+- Screens: `/anchor-one/goals`, `/anchor-one/messages`,
+  `/anchor-one/caregiver/[patientId]`.
+- Components: `GoalCard`, `GoalFormDialog`, `GoalDetailDialog`, `SupportChat`,
+  `RouteGuard`, `useUnreadMessages`.
+- Migration `0007_create_recovery_plan_tables` (idempotent; drops GORM's
+  no-cascade has-many FK so the explicit `ON DELETE CASCADE` is the only rule).
+
+**Deployment**
+- `anchorone.dcix.in` now serves the stack over HTTPS. nginx vhost
+  `/etc/nginx/conf.d/anchorone.conf` on `69.164.244.74` terminates TLS
+  (Let's Encrypt via certbot webroot) and proxies `/` → `:20000`,
+  `/api/` → `:20080`, with a 12 MB body cap for check-in audio and 120s
+  upstream timeouts for Gemini/Deepgram.
+- `deploy.yml` now bakes `NEXT_PUBLIC_API_URL=https://anchorone.dcix.in/api/v1`
+  — an https page may not call an http API, so the old `IP:20080` value would be
+  blocked as mixed content.
+
+**Verification**
+- `go build ./... && go vet ./...` — clean.
+- `npm run lint && npm run type-check && npm run build` — clean; all 15 routes
+  compiled.
+- Migration `0007` applied, rolled back and re-applied against Postgres; schema,
+  partial unread index and the single cascade FK confirmed.
+- End-to-end against the running stack with a real user + caregiver pair:
+  link → two goals → progress `12/90 (13%)` → caregiver list shows plan progress
+  → overview → two-way messaging with unread counts clearing correctly →
+  caregiver encouragement recorded as `encouragement`/`caregiver` → caregiver
+  progress write refused (403) → typed check-in analysed `MEDIUM` → **summary
+  absent without consent, present after the user enabled it, transcript absent
+  either way** → unlinked caregiver refused (403) → plain user refused the
+  caregiver list (403) → admin allowed the overview but refused the thread →
+  goal auto-completed at target with overshoot clamped.

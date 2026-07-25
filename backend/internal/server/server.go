@@ -23,11 +23,14 @@ const APIVersion = "v1"
 
 // Handlers collects everything the router needs.
 type Handlers struct {
-	Health  *handler.HealthHandler
-	Auth    *handler.AuthHandler
-	User    *handler.UserHandler
-	Role    *handler.RoleHandler
-	AuthSvc service.AuthService
+	Health    *handler.HealthHandler
+	Auth      *handler.AuthHandler
+	User      *handler.UserHandler
+	Role      *handler.RoleHandler
+	RecoverAI *handler.RecoverAIHandler
+	Goal      *handler.GoalHandler
+	Care      *handler.CareHandler
+	AuthSvc   service.AuthService
 }
 
 // Server owns the HTTP listener and its lifecycle.
@@ -113,6 +116,76 @@ func registerRoutes(engine *gin.Engine, h Handlers) {
 	protected.Use(middleware.Authenticate(h.AuthSvc))
 	{
 		protected.GET("/auth/me", h.Auth.Me)
+
+		// AnchorOne recovery routes.
+		recoverai := protected.Group("")
+		{
+			// Which optional integrations (Gemini, Deepgram) are configured.
+			recoverai.GET("/capabilities", h.RecoverAI.Capabilities)
+
+			// Check-in: voice (audio upload) or typed.
+			recoverai.POST("/checkin", h.RecoverAI.Checkin)
+			recoverai.POST("/risk", h.RecoverAI.Risk)
+
+			// Raw voice services.
+			recoverai.POST("/voice/transcribe", h.RecoverAI.Transcribe)
+			recoverai.POST("/voice/speak", h.RecoverAI.Speak)
+
+			recoverai.GET("/dashboard", h.RecoverAI.Dashboard)
+			recoverai.GET("/timeline", h.RecoverAI.Timeline)
+			recoverai.POST("/emergency", h.RecoverAI.Emergency)
+
+			recoverai.POST("/coach/chat", h.RecoverAI.CoachChat)
+			recoverai.GET("/coach/history", h.RecoverAI.CoachHistory)
+			recoverai.POST("/education", h.RecoverAI.Education)
+
+			// Recovery profile (goal, substance, emergency contacts).
+			recoverai.GET("/profile", h.RecoverAI.GetProfile)
+			recoverai.PUT("/profile", h.RecoverAI.UpdateProfile)
+			recoverai.GET("/caregivers", h.RecoverAI.GetCaregivers)
+			recoverai.PUT("/profile/caregiver", h.RecoverAI.SetCaregiver)
+		}
+
+		// The recovery plan: many goals per person, each with a progress log.
+		// These paths act on the caller's OWN plan.
+		goals := protected.Group("/goals")
+		{
+			goals.GET("", h.Goal.List)
+			goals.POST("", h.Goal.Create)
+			goals.GET("/summary", h.Goal.Summary)
+			goals.GET("/:goalID", h.Goal.Get)
+			goals.PUT("/:goalID", h.Goal.Update)
+			goals.DELETE("/:goalID", h.Goal.Delete)
+			goals.POST("/:goalID/progress", h.Goal.LogProgress)
+		}
+
+		// Patient-scoped routes. There is no role guard here on purpose: who may
+		// read a given person's record depends on whether that person linked
+		// this caregiver, which only the service layer can answer. A role check
+		// would either be too loose (any caregiver sees anyone) or redundant.
+		patients := protected.Group("/patients/:patientID")
+		{
+			patients.GET("", h.Care.PatientOverview)
+			patients.GET("/goals", h.Goal.ListForPatient)
+			patients.POST("/goals", h.Goal.CreateForPatient)
+
+			// The patient <-> caregiver conversation, shared by both sides.
+			patients.GET("/messages", h.Care.Thread)
+			patients.POST("/messages", h.Care.SendMessage)
+			patients.POST("/messages/read", h.Care.MarkRead)
+		}
+
+		// Unread badge, for whichever side of a conversation the caller is on.
+		protected.GET("/messages/unread", h.Care.UnreadCount)
+
+		// The caregiver's list of the people who chose them. Unlike the routes
+		// above this one is not about a specific person, so a role guard is the
+		// right check: a plain user has no list to show.
+		caregiverOnly := protected.Group("")
+		caregiverOnly.Use(middleware.RequireRole(model.RoleCaregiver, model.RoleAdmin))
+		{
+			caregiverOnly.GET("/caregiver", h.Care.ListPatients)
+		}
 
 		// Admin-only routes (RBAC check)
 		adminOnly := protected.Group("")

@@ -21,6 +21,10 @@ func All() []*gormigrate.Migration {
 		m0001EnableExtensions(),
 		m0002CreateUsersTable(),
 		m0003CreateRolesPermissions(),
+		m0004CreateRecoveraiTables(),
+		m0005AddCaregiverID(),
+		m0006ExtendRecoveraiTables(),
+		m0007CreateRecoveryPlanTables(),
 	}
 }
 

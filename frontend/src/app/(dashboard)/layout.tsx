@@ -18,6 +18,7 @@ import VerticalFooter from '@components/layout/vertical/Footer'
 import HorizontalFooter from '@components/layout/horizontal/Footer'
 import ScrollToTop from '@core/components/scroll-to-top'
 import AuthGuard from '@components/auth/AuthGuard'
+import RouteGuard from '@components/auth/RouteGuard'
 
 // Util Imports
 import { getMode, getSystemMode } from '@core/utils/serverHelpers'
@@ -36,12 +37,16 @@ const Layout = async (props: ChildrenType) => {
         systemMode={systemMode}
         verticalLayout={
           <VerticalLayout navigation={<Navigation mode={mode} />} navbar={<Navbar />} footer={<VerticalFooter />}>
-            <AuthGuard>{children}</AuthGuard>
+            <AuthGuard>
+              <RouteGuard>{children}</RouteGuard>
+            </AuthGuard>
           </VerticalLayout>
         }
         horizontalLayout={
           <HorizontalLayout header={<Header />} footer={<HorizontalFooter />}>
-            <AuthGuard>{children}</AuthGuard>
+            <AuthGuard>
+              <RouteGuard>{children}</RouteGuard>
+            </AuthGuard>
           </HorizontalLayout>
         }
       />

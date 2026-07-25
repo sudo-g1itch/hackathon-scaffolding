@@ -50,9 +50,9 @@ export type Config = {
 }
 
 const themeConfig: Config = {
-  templateName: 'Materialize',
+  templateName: 'AnchorOne',
   homePageUrl: '/home',
-  settingsCookieName: 'materialize-mui-next-demo-1',
+  settingsCookieName: 'anchorone-settings-cookie',
   mode: 'system', // 'system', 'light', 'dark'
   skin: 'default', // 'default', 'bordered'
   semiDark: false, // true, false

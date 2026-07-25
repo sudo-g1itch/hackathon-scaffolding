@@ -21,6 +21,11 @@ const (
 	CodeUnauthorized  Code = "UNAUTHORIZED"
 	CodeForbidden     Code = "FORBIDDEN"
 	CodeInternal      Code = "INTERNAL_ERROR"
+
+	// CodeUnavailable marks a dependency we do not control being down or
+	// unconfigured (e.g. Gemini, Deepgram). Its message is safe to show the
+	// user — it describes their situation, not our internals.
+	CodeUnavailable Code = "SERVICE_UNAVAILABLE"
 )
 
 // Fields carries per-field validation messages, keyed by JSON field name.
@@ -70,6 +75,7 @@ var (
 	ErrUnauthorized  = &Error{Code: CodeUnauthorized}
 	ErrForbidden     = &Error{Code: CodeForbidden}
 	ErrInternal      = &Error{Code: CodeInternal}
+	ErrUnavailable   = &Error{Code: CodeUnavailable}
 )
 
 func New(code Code, message string) *Error {
@@ -102,6 +108,12 @@ func Unauthorized(message string) *Error {
 
 func Forbidden(message string) *Error {
 	return New(CodeForbidden, message)
+}
+
+// Unavailable reports an upstream dependency as unusable. Unlike Internal, the
+// message is written for the user and is not sanitized away.
+func Unavailable(format string, args ...any) *Error {
+	return Newf(CodeUnavailable, format, args...)
 }
 
 func Internal(err error) *Error {

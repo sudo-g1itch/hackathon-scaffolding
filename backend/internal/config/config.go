@@ -29,6 +29,7 @@ type Config struct {
 	Log      Log      `mapstructure:"log"`
 	CORS     CORS     `mapstructure:"cors"`
 	JWT      JWT      `mapstructure:"jwt"`
+	AI       AI       `mapstructure:"ai"`
 }
 
 type App struct {
@@ -93,6 +94,27 @@ type CORS struct {
 	MaxAge           time.Duration `mapstructure:"max_age"`
 }
 
+// AI holds the credentials and tuning for the two external providers:
+// Gemini (reasoning) and Deepgram (speech-to-text / text-to-speech).
+//
+// Both are OPTIONAL. When a key is unset the corresponding feature reports
+// itself as unavailable instead of preventing the API from booting.
+type AI struct {
+	GeminiAPIKey     string        `mapstructure:"gemini_api_key"`
+	GeminiModel      string        `mapstructure:"gemini_model"`
+	DeepgramAPIKey   string        `mapstructure:"deepgram_api_key"`
+	DeepgramSTTModel string        `mapstructure:"deepgram_stt_model"`
+	DeepgramTTSModel string        `mapstructure:"deepgram_tts_model"`
+	RequestTimeout   time.Duration `mapstructure:"request_timeout"`
+	MaxAudioBytes    int64         `mapstructure:"max_audio_bytes"`
+}
+
+// GeminiEnabled reports whether AI reasoning features can run.
+func (a AI) GeminiEnabled() bool { return a.GeminiAPIKey != "" }
+
+// VoiceEnabled reports whether speech transcription/synthesis can run.
+func (a AI) VoiceEnabled() bool { return a.DeepgramAPIKey != "" }
+
 // Load reads configuration from the environment and an optional .env file.
 func Load(envPath string) (*Config, error) {
 	if envPath != "" {
@@ -144,14 +166,16 @@ func loadEnvFile(path string) error {
 }
 
 func setDefaults(v *viper.Viper) {
-	v.SetDefault("app.name", "hackathon")
+	v.SetDefault("app.name", "anchorOne")
 	v.SetDefault("app.env", EnvDevelopment)
 	v.SetDefault("app.auto_migrate", true)
 
 	v.SetDefault("http.host", "0.0.0.0")
 	v.SetDefault("http.port", 20080)
-	v.SetDefault("http.read_timeout", 15*time.Second)
-	v.SetDefault("http.write_timeout", 30*time.Second)
+	// Generous read/write windows: check-in uploads carry audio, and a Gemini
+	// round-trip (transcribe → reason) can legitimately take tens of seconds.
+	v.SetDefault("http.read_timeout", 60*time.Second)
+	v.SetDefault("http.write_timeout", 120*time.Second)
 	v.SetDefault("http.idle_timeout", 60*time.Second)
 	v.SetDefault("http.shutdown_timeout", 15*time.Second)
 	v.SetDefault("http.trusted_proxies", []string{})
@@ -185,6 +209,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("jwt.secret", "hackathon-jwt-secret-key-change-in-prod")
 	v.SetDefault("jwt.access_token_ttl", 24*time.Hour)
 	v.SetDefault("jwt.refresh_token_ttl", 7*24*time.Hour)
+	// ---- ai (optional integrations; inert while their keys are unset) ----
+	v.SetDefault("ai.gemini_api_key", "")
+	v.SetDefault("ai.gemini_model", "gemini-3.5-flash")
+	v.SetDefault("ai.deepgram_api_key", "")
+	v.SetDefault("ai.deepgram_stt_model", "nova-2")
+	v.SetDefault("ai.deepgram_tts_model", "aura-asteria-en")
+	v.SetDefault("ai.request_timeout", 60*time.Second)
+	v.SetDefault("ai.max_audio_bytes", 10<<20) // 10 MiB
 }
 
 func (c *Config) Validate() error {
@@ -206,6 +238,24 @@ func (c *Config) Validate() error {
 	}
 	if c.Database.Name == "" {
 		problems = append(problems, "database.name is required")
+	}
+	// AI keys are intentionally NOT required — an unset key disables that
+	// integration rather than blocking startup (see rule 3.8). Only the
+	// tuning around them has to be sane.
+	if c.AI.GeminiModel == "" {
+		problems = append(problems, "ai.gemini_model is required")
+	}
+	if c.AI.DeepgramSTTModel == "" {
+		problems = append(problems, "ai.deepgram_stt_model is required")
+	}
+	if c.AI.DeepgramTTSModel == "" {
+		problems = append(problems, "ai.deepgram_tts_model is required")
+	}
+	if c.AI.RequestTimeout <= 0 {
+		problems = append(problems, "ai.request_timeout must be greater than 0")
+	}
+	if c.AI.MaxAudioBytes <= 0 {
+		problems = append(problems, "ai.max_audio_bytes must be greater than 0")
 	}
 
 	switch c.Log.Format {

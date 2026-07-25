@@ -3,75 +3,9 @@ import type { SVGAttributes } from 'react'
 
 const Logo = (props: SVGAttributes<SVGElement>) => {
   return (
-    <svg width='40' height='22' viewBox='0 0 40 22' fill='none' xmlns='http://www.w3.org/2000/svg' {...props}>
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(-0.865206 0.501417 0.498585 0.866841 28.4115 0)'
-        fill='var(--mui-palette-primary-main)'
-      />
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(-0.865206 0.501417 0.498585 0.866841 28.4869 0)'
-        fill='url(#paint0_linear_448_114254)'
-        fillOpacity='0.4'
-      />
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(0.865206 0.501417 -0.498585 0.866841 25.6563 0)'
-        fill='var(--mui-palette-primary-main)'
-      />
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(-0.865206 0.501417 0.498585 0.866841 14.3293 0)'
-        fill='var(--mui-palette-primary-main)'
-      />
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(-0.865206 0.501417 0.498585 0.866841 14.3293 0)'
-        fill='url(#paint1_linear_448_114254)'
-        fillOpacity='0.4'
-      />
-      <rect
-        width='7.37565'
-        height='21.1131'
-        rx='3.68783'
-        transform='matrix(0.865206 0.501417 -0.498585 0.866841 11.5132 0)'
-        fill='var(--mui-palette-primary-main)'
-      />
-      <defs>
-        <linearGradient
-          id='paint0_linear_448_114254'
-          x1='3.68783'
-          y1='0'
-          x2='3.68783'
-          y2='21.1131'
-          gradientUnits='userSpaceOnUse'
-        >
-          <stop />
-          <stop offset='1' stopOpacity='0' />
-        </linearGradient>
-        <linearGradient
-          id='paint1_linear_448_114254'
-          x1='3.68783'
-          y1='0'
-          x2='3.68783'
-          y2='21.1131'
-          gradientUnits='userSpaceOnUse'
-        >
-          <stop />
-          <stop offset='1' stopOpacity='0' />
-        </linearGradient>
-      </defs>
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="var(--mui-palette-primary-main)" opacity="0.8"/>
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09" stroke="var(--mui-palette-primary-dark)" strokeWidth="1.5"/>
     </svg>
   )
 }

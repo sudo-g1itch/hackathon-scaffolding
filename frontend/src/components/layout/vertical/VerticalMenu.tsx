@@ -1,4 +1,5 @@
 // MUI Imports
+import Chip from '@mui/material/Chip'
 import { useTheme } from '@mui/material/styles'
 
 // Third-party Imports
@@ -8,10 +9,15 @@ import PerfectScrollbar from 'react-perfect-scrollbar'
 import type { VerticalMenuContextProps } from '@menu/components/vertical-menu/Menu'
 
 // Component Imports
-import { Menu, MenuItem, SubMenu, MenuSection } from '@menu/vertical-menu'
+import { Menu, MenuItem, MenuSection } from '@menu/vertical-menu'
+
+// Config Imports
+import { navigationFor } from '@/configs/navigation'
 
 // Hook Imports
 import useVerticalNav from '@menu/hooks/useVerticalNav'
+import useUnreadMessages from '@/hooks/useUnreadMessages'
+import { useAuth } from '@/contexts/AuthContext'
 
 // Styled Component Imports
 import StyledVerticalNavExpandIcon from '@menu/styles/vertical/StyledVerticalNavExpandIcon'
@@ -39,9 +45,15 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
   // Hooks
   const theme = useTheme()
   const verticalNavOptions = useVerticalNav()
+  const { user } = useAuth()
+  const { unread } = useUnreadMessages()
 
   // Vars
   const { isBreakpointReached, transitionDuration } = verticalNavOptions
+
+  // The menu is built from the shared navigation config rather than hard-coded
+  // here, so what a role can see and what a role can open stay one decision.
+  const sections = navigationFor(user?.role)
 
   const ScrollWrapper = isBreakpointReached ? 'div' : PerfectScrollbar
 
@@ -68,25 +80,25 @@ const VerticalMenu = ({ scrollMenu }: Props) => {
         renderExpandedMenuItemIcon={{ icon: <i className='ri-circle-fill' /> }}
         menuSectionStyles={menuSectionStyles(verticalNavOptions, theme)}
       >
-        <MenuItem href='/home' icon={<i className='ri-home-smile-line' />}>
-          Home
-        </MenuItem>
-        <MenuItem href='/about' icon={<i className='ri-information-line' />}>
-          About
-        </MenuItem>
-        <MenuSection label='Admin & RBAC'>
-          <MenuItem href='/admin/users' icon={<i className='ri-user-line' />}>
-            User Management
-          </MenuItem>
-          <SubMenu label='Roles & Permissions' icon={<i className='ri-shield-keyhole-line' />}>
-            <MenuItem href='/admin/roles' icon={<i className='ri-shield-user-line' />}>
-              Roles
-            </MenuItem>
-            <MenuItem href='/admin/permissions' icon={<i className='ri-lock-2-line' />}>
-              Permissions
-            </MenuItem>
-          </SubMenu>
-        </MenuSection>
+
+        {sections.map(section => (
+          <MenuSection key={section.label} label={section.label}>
+            {section.items.map(item => (
+              <MenuItem
+                key={item.href}
+                href={item.href}
+                icon={<i className={item.icon} />}
+                suffix={
+                  item.badge === 'unread' && unread > 0 ? (
+                    <Chip size='small' color='error' variant='tonal' label={unread} />
+                  ) : undefined
+                }
+              >
+                {item.label}
+              </MenuItem>
+            ))}
+          </MenuSection>
+        ))}
       </Menu>
     </ScrollWrapper>
   )

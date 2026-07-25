@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/',
-        destination: '/home',
+        destination: '/anchor-one/dashboard',
         permanent: true,
         locale: false
       }

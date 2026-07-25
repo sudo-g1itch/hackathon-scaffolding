@@ -1,4 +1,5 @@
-export type Role = 'admin' | 'manager' | 'user'
+// Mirrors the role constants in backend/internal/model/user.go.
+export type Role = 'admin' | 'manager' | 'user' | 'caregiver'
 
 export type User = {
   id: string

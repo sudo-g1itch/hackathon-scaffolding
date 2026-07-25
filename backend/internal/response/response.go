@@ -82,6 +82,8 @@ func Status(code apperr.Code) int {
 		return http.StatusUnauthorized
 	case apperr.CodeForbidden:
 		return http.StatusForbidden
+	case apperr.CodeUnavailable:
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusInternalServerError
 	}
@@ -93,13 +95,20 @@ func Error(c *gin.Context, err error) {
 	status := Status(appErr.Code)
 
 	message := appErr.Message
+
+	// Every 5xx is logged server-side with the request id. Only CodeInternal —
+	// the genuinely unexpected — has its message sanitized; a CodeUnavailable
+	// message is written for the user ("AI is not configured") and leaks
+	// nothing, so it is passed through.
 	if status >= http.StatusInternalServerError {
 		ctxkey.Logger(c).Error("request failed",
 			zap.Error(err),
 			zap.String("path", c.FullPath()),
 			zap.String("method", c.Request.Method),
 		)
-		message = genericInternalMessage
+		if appErr.Code == apperr.CodeInternal {
+			message = genericInternalMessage
+		}
 	}
 
 	c.AbortWithStatusJSON(status, ErrorEnvelope{

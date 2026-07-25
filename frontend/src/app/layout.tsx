@@ -17,8 +17,8 @@ import '@/app/globals.css'
 import '@assets/iconify-icons/generated-icons.css'
 
 export const metadata = {
-  title: 'Materialize - Material Next.js Admin Template',
-  description: 'Materialize - Material Next.js Admin Template'
+  title: 'AnchorOne - Caregiving Management Platform',
+  description: 'AnchorOne - Caregiving Management Platform'
 }
 
 const RootLayout = async (props: ChildrenType) => {

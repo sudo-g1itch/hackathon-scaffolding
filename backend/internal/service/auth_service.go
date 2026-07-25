@@ -119,7 +119,7 @@ func (s *authService) Register(ctx context.Context, req RegisterRequest) (*AuthR
 	role := model.RoleUser
 	if req.Role != nil && *req.Role != "" {
 		switch *req.Role {
-		case model.RoleAdmin, model.RoleManager, model.RoleUser:
+		case model.RoleAdmin, model.RoleManager, model.RoleUser, model.RoleCaregiver:
 			role = *req.Role
 		default:
 			return nil, apperr.Validation(apperr.Fields{"role": []string{"invalid role"}})
