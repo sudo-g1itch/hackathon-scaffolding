@@ -1,0 +1,15 @@
+# Production overrides — used by the Deploy workflow:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# Explicit `-f` flags mean docker-compose.override.yml (the dev override) is
+# NOT auto-loaded, so none of the development settings leak into production.
+#
+# The one thing production must fix: NEXT_PUBLIC_API_URL is inlined by Next.js
+# at *build* time, so it has to be passed as a build arg (the base file only
+# sets it as a runtime env var, which Next ignores for NEXT_PUBLIC_* values).
+
+services:
+  web:
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:20080/api/v1}
