@@ -32,8 +32,8 @@ import { getApiErrorMessage } from '@/utils/handleApiError'
 
 const LoginV2 = ({ mode }: { mode: Mode }) => {
   const [isLoginView, setIsLoginView] = useState(true)
-  const [email, setEmail] = useState('admin@hackathon.local')
-  const [password, setPassword] = useState('Admin123!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [role, setRole] = useState('user')
