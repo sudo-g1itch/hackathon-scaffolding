@@ -1,0 +1,74 @@
+name: Deploy
+
+# Continuous deployment. On every push to main the self-hosted runner (which
+# lives ON the deploy server) rebuilds and restarts the Docker Compose stack.
+on:
+  push:
+    branches: [main]
+
+# Never let two deploys run at once; let the newest finish rather than cancel
+# a half-applied one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy stack
+    runs-on: [self-hosted, hackathon]
+    environment: production
+    env:
+      # Public address of this server. Baked into the frontend at build time
+      # and used for the API's CORS allow-list.
+      DEPLOY_HOST: "69.164.244.74"
+      COMPOSE_FILES: "-f docker-compose.yml -f docker-compose.prod.yml"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute version tag
+        id: ver
+        run: echo "version=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Write production .env
+        run: |
+          cat > .env <<EOF
+          VERSION=${{ steps.ver.outputs.version }}
+          APP_ENV=production
+          API_PORT=20080
+          WEB_PORT=20000
+          DATABASE_USER=hackathon
+          DATABASE_PASSWORD=${{ secrets.DATABASE_PASSWORD }}
+          DATABASE_NAME=hackathon
+          DATABASE_SSL_MODE=disable
+          DATABASE_PORT=5432
+          LOG_LEVEL=info
+          LOG_FORMAT=json
+          NEXT_PUBLIC_API_URL=http://${DEPLOY_HOST}:20080/api/v1
+          CORS_ALLOWED_ORIGINS=http://${DEPLOY_HOST}:20000
+          EOF
+
+      - name: Build images
+        run: docker compose ${COMPOSE_FILES} build
+
+      - name: Apply database migrations
+        run: docker compose ${COMPOSE_FILES} run --rm migrate
+
+      - name: Start / update stack
+        run: docker compose ${COMPOSE_FILES} up -d --remove-orphans
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:20080/healthz" >/dev/null 2>&1; then
+              echo "API healthy"; exit 0
+            fi
+            echo "waiting for API... ($i/30)"; sleep 2
+          done
+          echo "API did not become healthy"; docker compose ${COMPOSE_FILES} logs --tail=50 api; exit 1
+
+      - name: Show running services
+        run: docker compose ${COMPOSE_FILES} ps
+
+      - name: Prune dangling images
+        if: always()
+        run: docker image prune -f
